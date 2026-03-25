@@ -1,0 +1,2 @@
+# Note: Since this is a Node.js/TypeScript workspace, dependencies are managed via package.json files.
+# For Python-related scripts or future dependencies, add them here.
