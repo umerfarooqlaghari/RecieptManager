@@ -1,0 +1,272 @@
+env: load .env
+env: export EXPO_PUBLIC_BACKEND_URL EXPO_PUBLIC_RC_TEST_STORE_KEY EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_SUPABASE_URL
+› Planning build
+› Clean Succeeded
+› Executing react-native Pods/hermes-engine » [CP-User] [Hermes] Replace Hermes for the right configuration, if needed
+› Executing react-native Pods/ReactNativeDependencies » [CP-User] [RNDeps] Replace React Native Dependencies for the right configuration, if needed
+› Preparing react-native-purchases Pods/RevenueCat-RevenueCat » ResourceBundle-RevenueCat-RevenueCat-Info.plist
+› Copying   react-native-purchases RevenueCat/RevenueCat.bundle/PrivacyInfo.xcprivacy ➜ ios/Pods/RevenueCat/Sources/PrivacyInfo.xcprivacy
+› Preparing Pods/React-cxxreact-React-cxxreact_privacy » ResourceBundle-React-cxxreact_privacy-React-cxxreact-Info.plist
+› Copying   React-cxxreact/React-cxxreact_privacy.bundle/PrivacyInfo.xcprivacy ➜ node_modules/react-native/ReactCommon/cxxreact/PrivacyInfo.xcprivacy
+› Preparing Pods/React-Core-React-Core_privacy » ResourceBundle-React-Core_privacy-React-Core-Info.plist
+› Copying   React-Core/React-Core_privacy.bundle/PrivacyInfo.xcprivacy ➜ node_modules/react-native/React/Resources/PrivacyInfo.xcprivacy
+› Preparing Pods/RNSVG-RNSVGFilters » ResourceBundle-RNSVGFilters-RNSVG-Info.plist
+› Copying   RNSVG/RNSVGFilters.bundle/RNSVGCompositeXor.iphoneos.metallib ➜ node_modules/react-native-svg/apple/Filters/MetalCI/RNSVGCompositeXor.iphoneos.metallib
+› Copying   RNSVG/RNSVGFilters.bundle/RNSVGArithmeticFilter.iphoneos.metallib ➜ node_modules/react-native-svg/apple/Filters/MetalCI/RNSVGArithmeticFilter.iphoneos.metallib
+› Preparing Pods/RNCAsyncStorage-RNCAsyncStorage_resources » ResourceBundle-RNCAsyncStorage_resources-RNCAsyncStorage-Info.plist
+› Copying   RNCAsyncStorage/RNCAsyncStorage_resources.bundle/PrivacyInfo.xcprivacy ➜ node_modules/@react-native-async-storage/async-storage/ios/PrivacyInfo.xcprivacy
+› Creating  react-native-purchases Pods/RevenueCat-RevenueCat » RevenueCat.bundle
+› Preparing react-native-purchases Pods/PurchasesHybridCommon-PurchasesHybridCommon » ResourceBundle-PurchasesHybridCommon-PurchasesHybridCommon-Info.plist
+› Copying   react-native-purchases PurchasesHybridCommon/PurchasesHybridCommon.bundle/PrivacyInfo.xcprivacy ➜ ios/Pods/PurchasesHybridCommon/ios/PurchasesHybridCommon/PurchasesHybridCommon/PrivacyInfo.xcprivacy
+› Preparing Pods/ExpoNotifications-ExpoNotifications_privacy » ResourceBundle-ExpoNotifications_privacy-ExpoNotifications-Info.plist
+› Copying   ExpoNotifications/ExpoNotifications_privacy.bundle/PrivacyInfo.xcprivacy ➜ node_modules/expo-notifications/ios/PrivacyInfo.xcprivacy
+› Creating  Pods/React-cxxreact-React-cxxreact_privacy » React-cxxreact_privacy.bundle
+› Preparing Pods/ExpoLocalization-ExpoLocalization_privacy » ResourceBundle-ExpoLocalization_privacy-ExpoLocalization-Info.plist
+› Copying   ExpoLocalization/ExpoLocalization_privacy.bundle/PrivacyInfo.xcprivacy ➜ node_modules/expo-localization/ios/PrivacyInfo.xcprivacy
+› Creating  Pods/React-Core-React-Core_privacy » React-Core_privacy.bundle
+› Preparing Pods/ExpoFileSystem-ExpoFileSystem_privacy » ResourceBundle-ExpoFileSystem_privacy-ExpoFileSystem-Info.plist
+› Copying   ExpoFileSystem/ExpoFileSystem_privacy.bundle/PrivacyInfo.xcprivacy ➜ node_modules/expo-file-system/ios/PrivacyInfo.xcprivacy
+› Creating  Pods/RNSVG-RNSVGFilters » RNSVGFilters.bundle
+› Creating  Pods/RNCAsyncStorage-RNCAsyncStorage_resources » RNCAsyncStorage_resources.bundle
+› Preparing Pods/EXConstants-ExpoConstants_privacy » ResourceBundle-ExpoConstants_privacy-EXConstants-Info.plist
+› Copying   EXConstants/ExpoConstants_privacy.bundle/PrivacyInfo.xcprivacy ➜ node_modules/expo-constants/ios/PrivacyInfo.xcprivacy
+› Preparing expo-constants Pods/EXConstants-EXConstants » ResourceBundle-EXConstants-EXConstants-Info.plist
+› Creating  react-native-purchases Pods/PurchasesHybridCommon-PurchasesHybridCommon » PurchasesHybridCommon.bundle
+› Preparing Pods/EXApplication-ExpoApplication_privacy » ResourceBundle-ExpoApplication_privacy-EXApplication-Info.plist
+› Copying   EXApplication/ExpoApplication_privacy.bundle/PrivacyInfo.xcprivacy ➜ node_modules/expo-application/ios/PrivacyInfo.xcprivacy
+› Creating  Pods/ExpoNotifications-ExpoNotifications_privacy » ExpoNotifications_privacy.bundle
+› Creating  Pods/ExpoLocalization-ExpoLocalization_privacy » ExpoLocalization_privacy.bundle
+› Creating  Pods/ExpoFileSystem-ExpoFileSystem_privacy » ExpoFileSystem_privacy.bundle
+› Creating  Pods/EXConstants-ExpoConstants_privacy » ExpoConstants_privacy.bundle
+› Creating  expo-constants Pods/EXConstants-EXConstants » EXConstants.bundle
+› Creating  Pods/EXApplication-ExpoApplication_privacy » ExpoApplication_privacy.bundle
+› Executing react-native Pods/hermes-engine » [CP] Copy XCFrameworks
+› Executing react-native Pods/ReactNativeDependencies » [CP] Copy XCFrameworks
+› Compiling expo-json-utils Pods/EXJSONUtils » NSDictionary+EXJSONUtils.m
+› Compiling expo-dev-menu-interface Pods/expo-dev-menu-interface » expo-dev-menu-interface-dummy.m
+› Compiling expo-json-utils Pods/EXJSONUtils » EXJSONUtils-dummy.m
+› Packaging expo-dev-menu-interface Pods/expo-dev-menu-interface » libexpo-dev-menu-interface.a
+› Packaging expo-json-utils Pods/EXJSONUtils » libEXJSONUtils.a
+› Preparing Pods/expo-dev-menu-EXDevMenu » ResourceBundle-EXDevMenu-expo-dev-menu-Info.plist
+› Compiling react-native Pods/RCTSwiftUI » RCTSwiftUI-dummy.m
+› Compiling react-native-purchases Pods/RevenueCat » RevenueCat-dummy.m
+› Executing expo-dev-menu-interface Pods/expo-dev-menu-interface » Copy generated compatibility header
+› Packaging react-native Pods/RCTSwiftUI » libRCTSwiftUI.a
+› Executing react-native Pods/RCTSwiftUI » Copy generated compatibility header
+› Creating  Pods/expo-dev-menu-EXDevMenu » EXDevMenu.bundle
+› Preparing Pods/expo-dev-launcher-EXDevLauncher » ResourceBundle-EXDevLauncher-expo-dev-launcher-Info.plist
+› Creating  Pods/expo-dev-launcher-EXDevLauncher » EXDevLauncher.bundle
+› Executing react-native Pods/React-Core-prebuilt » [CP-User] [RNDeps] Replace React Native Core for the right configuration, if needed
+› Compiling react-native Pods/RCTSwiftUIWrapper » RCTSwiftUIWrapper-dummy.m
+› Compiling react-native Pods/RCTSwiftUIWrapper » RCTSwiftUIContainerViewWrapper.m
+› Packaging react-native Pods/RCTSwiftUIWrapper » libRCTSwiftUIWrapper.a
+› Executing react-native Pods/React-Core-prebuilt » [CP] Copy XCFrameworks
+› Packaging react-native-purchases Pods/RevenueCat » libRevenueCat.a
+› Executing react-native-purchases Pods/RevenueCat » Copy generated compatibility header
+› Compiling react-native-purchases Pods/PurchasesHybridCommon » PurchasesHybridCommon-dummy.m
+› Executing react-native Pods/React-RCTFBReactNativeSpec » [CP-User] [RN]Check FBReactNativeSpec
+› Compiling expo-modules-core Pods/ExpoModulesJSI » TypedArray.cpp
+› Compiling expo-modules-core Pods/ExpoModulesJSI » ObjectDeallocator.cpp
+› Compiling expo-modules-core Pods/ExpoModulesJSI » MemoryBuffer.cpp
+› Compiling expo-modules-core Pods/ExpoModulesJSI » MainThreadInvoker.mm
+› Compiling expo-modules-core Pods/ExpoModulesJSI » JSIUtils.cpp
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXStringUtils.cpp
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXRawJavaScriptFunction.mm
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXRawJavaScriptArrayBuffer.mm
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXNativeArrayBuffer.mm
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXJavaScriptWeakObject.mm
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXJavaScriptValue.mm
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXJavaScriptTypedArray.mm
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXJavaScriptRuntime.mm
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXJavaScriptObjectBinding.mm
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXJavaScriptObject.mm
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXJSIUtils.mm
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXJSIConversions.mm
+› Compiling expo-modules-core Pods/ExpoModulesJSI » EXArrayBuffer.mm
+› Packaging react-native-purchases Pods/PurchasesHybridCommon » libPurchasesHybridCommon.a
+› Compiling expo-modules-core Pods/ExpoModulesJSI » ExpoModulesJSI-dummy.m
+› Executing react-native-purchases Pods/PurchasesHybridCommon » Copy generated compatibility header
+› Executing mobile Pods/ReactCodegen » [CP-User] Generate Specs
+› Compiling react-native-linear-gradient Pods/BVLinearGradient » BVLinearGradientLayer.m
+› Compiling react-native-linear-gradient Pods/BVLinearGradient » BVLinearGradientManager.m
+› Compiling react-native-linear-gradient Pods/BVLinearGradient » BVLinearGradient.m
+› Compiling react-native-linear-gradient Pods/BVLinearGradient » BVLinearGradient-dummy.m
+› Compiling @expo/log-box Pods/ExpoLogBox » ExpoRedBoxSwap.mm
+› Packaging react-native-linear-gradient Pods/BVLinearGradient » libBVLinearGradient.a
+› Compiling @expo/log-box Pods/ExpoLogBox » ExpoLogBox-dummy.m
+› Compiling react-native-purchases Pods/RNPurchases » RNPurchases-dummy.m
+› Compiling react-native-purchases Pods/RNPurchases » RNPurchases.m
+› Compiling mobile Pods/ReactCodegen » ShadowNodes.cpp
+› Compiling mobile Pods/ReactCodegen » States.cpp
+› Compiling mobile Pods/ReactCodegen » rnsvg-generated.mm
+› Compiling mobile Pods/ReactCodegen » rnreanimated-generated.mm
+› Compiling mobile Pods/ReactCodegen » rnasyncstorage-generated.mm
+› Packaging @expo/log-box Pods/ExpoLogBox » libExpoLogBox.a
+› Packaging react-native-purchases Pods/RNPurchases » libRNPurchases.a
+› Compiling mobile Pods/ReactCodegen » RCTUnstableModulesRequiringMainQueueSetupProvider.mm
+› Compiling mobile Pods/ReactCodegen » RCTThirdPartyComponentsProvider.mm
+› Compiling mobile Pods/ReactCodegen » ReactCodegen-dummy.m
+› Compiling mobile Pods/ReactCodegen » RCTModulesConformingToProtocolsProvider.mm
+› Compiling mobile Pods/ReactCodegen » RCTModuleProviders.mm
+› Compiling mobile Pods/ReactCodegen » Props.cpp
+› Compiling mobile Pods/ReactCodegen » EventEmitters.cpp
+› Packaging expo-modules-core Pods/ExpoModulesJSI » libExpoModulesJSI.a
+› Compiling mobile Pods/ReactCodegen » ComponentDescriptors.cpp
+› Compiling mobile Pods/ReactAppDependencyProvider » RCTAppDependencyProvider.mm
+› Compiling mobile Pods/ReactAppDependencyProvider » ReactAppDependencyProvider-dummy.m
+› Compiling react-native-svg Pods/RNSVG » RNSVGViewBox.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGUseManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGUse.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGTopAlignedLabel.ios.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGTextProperties.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGTextPathManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGTextPath.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGTextManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGText.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGTSpanManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGTSpan.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGSymbolManager.mm
+› Packaging mobile Pods/ReactCodegen » libReactCodegen.a
+› Compiling react-native-svg Pods/RNSVG » RNSVGSymbol.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGSvgViewModule.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGSvgViewManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGSvgView.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGSolidColorBrush.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGShadowNodes.cpp
+› Compiling react-native-svg Pods/RNSVG » RNSVGRenderableModule.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGRenderableManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGRenderable.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGRenderUtils.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGRectManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGRect.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGRadialGradientManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGRadialGradient.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGPropHelper.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGPatternManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGPattern.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGPathParser.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGPathMeasure.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGPathManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGPath.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGPainterBrush.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGPainter.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGNodeManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGNode.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGMaskManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGMask.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGMarkerPosition.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGMarkerManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGMarker.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGLinearGradientManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGLinearGradient.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGLineManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGLine.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGLength.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGLayoutableShadowNode.cpp
+› Compiling react-native-svg Pods/RNSVG » RNSVGImageState.cpp
+› Compiling react-native-svg Pods/RNSVG » RNSVGImageShadowNode.cpp
+› Compiling react-native-svg Pods/RNSVG » RNSVGImageManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGImage.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGGroupManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGGroup.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGGlyphContext.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGForeignObjectManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGForeignObject.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFontData.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFilterRegion.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFilterPrimitiveManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFilterPrimitive.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFilterManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFilter.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeOffsetManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeOffset.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeMergeManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeMerge.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeGaussianBlurManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeGaussianBlur.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeFloodManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeFlood.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeCompositeManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeComposite.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeColorMatrixManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeColorMatrix.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeBlendManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGFeBlend.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGEllipseManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGEllipse.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGDefsManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGDefs.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGCustomFilter.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGConvert.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGContextBrush.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGCompositeXor.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGClipPathManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGClipPath.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGCircleManager.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGCircle.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGBrush.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGBezierElement.mm
+› Compiling react-native-svg Pods/RNSVG » RNSVGArithmeticFilter.mm
+› Compiling react-native-svg Pods/RNSVG » RCTConvert+RNSVG.mm
+› Executing react-native-purchases Pods/RNPurchases » Copy generated compatibility header
+› Packaging mobile Pods/ReactAppDependencyProvider » libReactAppDependencyProvider.a
+› Compiling react-native-reanimated Pods/RNReanimated » WorkletRuntimeRegistry.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » WorkletRuntimeDecorator.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » WorkletRuntime.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » WorkletEventHandler.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » UIScheduler.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » UIRuntimeDecorator.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » Shareables.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » ShadowTreeCloner.cpp
+
+❌  (ios/Pods/Headers/Public/ReactNativeDependencies/folly/Expected.h:1587:10)
+
+  1585 | // Inspired by https://github.com/toby-allsopp/coroutine_monad
+  1586 | #if FOLLY_HAS_COROUTINES
+> 1587 | #include <folly/coro/Coroutine.h>
+       |          ^ 'folly/coro/Coroutine.h' file not found
+  1588 |
+  1589 | namespace folly {
+  1590 | namespace expected_detail {
+
+› Compiling react-native-reanimated Pods/RNReanimated » ReanimatedWorkletRuntimeDecorator.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » ReanimatedVersion.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » ReanimatedRuntime.cpp
+
+❌  (ios/Pods/Headers/Public/ReactNativeDependencies/folly/Expected.h:1587:10)
+
+  1585 | // Inspired by https://github.com/toby-allsopp/coroutine_monad
+  1586 | #if FOLLY_HAS_COROUTINES
+> 1587 | #include <folly/coro/Coroutine.h>
+       |          ^ 'folly/coro/Coroutine.h' file not found
+  1588 |
+  1589 | namespace folly {
+  1590 | namespace expected_detail {
+
+› Compiling react-native-reanimated Pods/RNReanimated » ReanimatedMountHook.cpp
+
+❌  (ios/Pods/Headers/Public/ReactNativeDependencies/folly/Expected.h:1587:10)
+
+  1585 | // Inspired by https://github.com/toby-allsopp/coroutine_monad
+  1586 | #if FOLLY_HAS_COROUTINES
+> 1587 | #include <folly/coro/Coroutine.h>
+       |          ^ 'folly/coro/Coroutine.h' file not found
+  1588 |
+  1589 | namespace folly {
+  1590 | namespace expected_detail {
+
+› Compiling react-native-reanimated Pods/RNReanimated » ReanimatedJSIUtils.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » ReanimatedHermesRuntime.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » ReanimatedCommitHook.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » RNRuntimeDecorator.cpp
+› Compiling react-native-reanimated Pods/RNReanimated » REASwizzledUIManager.mm
+› Compiling react-native-reanimated Pods/RNReanimated » REASlowAnimations.mm
+› Compiling react-native-reanimated Pods/RNReanimated » REANodesManager.mm
+⚠️  Script has ambiguous dependencies causing it to run on every build.
+   To fix, go to: Xcode » ExpenseManager/ExpenseManager » Build Phases » '[Expo Dev Launcher] Strip Local Network Keys for Release'
+   Either: Uncheck "Based on dependency analysis", or select output files to trigger the script
+
+
+› 3 error(s), and 1 warning(s)
+
+CommandError: Failed to build iOS project. "xcodebuild" exited with error code 65.

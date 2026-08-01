@@ -1,0 +1,132 @@
+{
+  "common": {
+    "welcome": "Welcome,",
+    "save": "Save",
+    "close": "Close",
+    "cancel": "Cancel",
+    "all": "All",
+    "error": "Error",
+    "success": "Success",
+    "loading": "Loading...",
+    "view_details": "View Item Breakdown",
+    "hide_details": "Hide Breakdown"
+  },
+  "home": {
+    "total_balance": "Total Balance",
+    "spending": "Spending",
+    "scan_receipt": "Scan Receipt",
+    "view_reports": "View All Reports",
+    "add_manual": "Add Manual",
+    "visualize": "Visualize your spendings",
+    "transactions": "Transactions",
+    "no_transactions": "No transactions for this period."
+  },
+  "auth": {
+    "login": "Login",
+    "signup": "Sign Up",
+    "email": "Email",
+    "password": "Password",
+    "forgot_password": "Forgot Password?",
+    "verify_email": "Verify",
+    "otp_placeholder": "6-digit code",
+    "otp_hint": "Enter the verification code we sent to {{email}}.",
+    "otp_sent_title": "Check your email",
+    "otp_sent_body": "We sent a 6-digit code to {{email}}.",
+    "verify_otp": "Verify",
+    "resend_otp": "Resend code"
+  },
+  "explore": {
+    "landing_title": "Receipts &\nExpenses\nWaiting For You",
+    "landing_subtitle": "Scan receipts, track spending, and export clean reports — before your paperwork piles up.",
+    "explore_cta": "Explore ➔",
+    "landing_hint": "Tap Explore to see how it works.",
+    "skip": "Skip",
+    "next": "Next",
+    "get_started": "Get started",
+    "already_have_account": "I already have an account",
+    "slide1_title": "Scan any receipt.\nInstantly structured.",
+    "slide1_body": "Point your camera at a receipt — our AI extracts merchant, date, line items, tax, and totals in seconds.",
+    "slide2_title": "Reports that\nmake sense.",
+    "slide2_body": "Filter by month, category, or store. See spending trends and category breakdowns at a glance.",
+    "slide3_title": "Secure by\ndesign.",
+    "slide3_body": "Receipt images stored in private AWS storage. Data protected with Supabase authentication and row-level security.",
+    "slide4_title": "Ready to take\ncontrol?",
+    "slide4_body": "Start your 14-day free trial. Scan receipts, build reports, and export to Excel — all in one place."
+  },
+  "profile": {
+    "title": "Profile",
+    "first_name": "First Name",
+    "last_name": "Last Name",
+    "phone": "Phone",
+    "save_changes": "Save Changes",
+    "subscriptions": "Subscriptions",
+    "privacy": "Privacy Policy",
+    "language": "Language",
+    "edit_photo": "Tap to change photo"
+  },
+  "premium": {
+    "upgrade": "Upgrade to Premium",
+    "unlock": "Unlock advanced analytics, custom reports, and a 14-day free trial.",
+    "maybe_later": "Maybe Later",
+    "restore": "Restore Purchases",
+    "best_value": "Best Value"
+  },
+  "months": {
+    "all": "All",
+    "jan": "Jan", "feb": "Feb", "mar": "Mar", "apr": "Apr", "may": "May", "jun": "Jun",
+    "jul": "Jul", "aug": "Aug", "sep": "Sep", "oct": "Oct", "nov": "Nov", "dec": "Dec"
+  },
+  "reports": {
+    "title": "Reports",
+    "period": "Period",
+    "periods": {
+      "all": "All Time",
+      "3m": "3 Months",
+      "6m": "6 Months",
+      "year": "Current Year",
+      "custom": "Custom Range"
+    },
+    "filter_category": "Filter by Category",
+    "filter_store": "Store Name",
+    "no_data": "No results found for these filters.",
+    "export": "Export Excel",
+    "loading": "Loading reports...",
+    "total_spend": "Total Spend",
+    "receipts": "Receipts"
+  },
+  "manual_add": {
+    "title_new": "Add Manual",
+    "title_edit": "Edit Expense",
+    "transaction_detail": "Transaction Detail",
+    "store": "Store Name",
+    "amount": "Amount",
+    "date": "Date",
+    "category": "Category",
+    "items": "Items & Tax",
+    "tax": "Tax",
+    "add_item": "Add Item",
+    "delete": "Delete Expense",
+    "item_name": "Item Name",
+    "qty": "Qty",
+    "price": "Price"
+  },
+  "support": {
+    "title": "Customer Support",
+    "subject": "Subject",
+    "message": "Message",
+    "send": "Send Message",
+    "faq": "Frequently Asked Questions"
+  },
+  "faqs": {
+    "q1": "How do I scan a receipt?", "a1": "Tap the 'Scan Receipt' button and take a photo or choose from gallery. Our AI will automatically extract details.",
+    "q2": "Can I add expenses manually?", "a2": "Yes, tap the 'Add Manual' button on the home screen to enter details without a receipt.",
+    "q3": "How do I see my monthly reports?", "a3": "Tap 'View All Reports' to see detailed spending breakdown and analytics.",
+    "q4": "Is my data secure?", "a4": "We use industry-standard encryption and Supabase for secure data storage.",
+    "q5": "Can I delete an expense?", "a5": "Tap on any transaction to see details, then tap the trash icon to remove it.",
+    "q6": "Will it work offline?", "a6": "Currently, an internet connection is required to sync with our AI and database.",
+    "q7": "How do I change my currency?", "a7": "Currency preferences can be set in the Profile section (coming soon).",
+    "q8": "What if the AI misses an item?", "a8": "You can always edit transaction details or individual items manually.",
+    "q9": "Can I export my data?", "a9": "CSV and PDF export features are currently in development.",
+    "q10": "How do I reset my password?", "a10": "Password reset can be initiated from the Auth screen via email."
+  }
+}

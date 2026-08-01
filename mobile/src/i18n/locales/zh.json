@@ -1,0 +1,141 @@
+{
+  "common": {
+    "welcome": "欢迎,",
+    "save": "保存",
+    "close": "关闭",
+    "cancel": "取消",
+    "all": "全部",
+    "error": "错误",
+    "success": "成功",
+    "loading": "加载中...",
+    "view_details": "查看项目明细",
+    "hide_details": "隐藏明细"
+  },
+  "home": {
+    "total_balance": "总余额",
+    "spending": "支出",
+    "scan_receipt": "扫描收据",
+    "view_reports": "查看所有报告",
+    "add_manual": "手动添加",
+    "visualize": "可视化支出分析",
+    "transactions": "最近交易",
+    "no_transactions": "该时段没有交易记录。"
+  },
+  "auth": {
+    "login": "登录",
+    "signup": "注册",
+    "email": "电子邮件",
+    "password": "密码",
+    "forgot_password": "忘记密码？",
+    "verify_email": "验证",
+    "otp_placeholder": "6位验证码",
+    "otp_hint": "请输入我们发送至 {{email}} 的验证码。",
+    "otp_sent_title": "请查收邮件",
+    "otp_sent_body": "我们已向 {{email}} 发送了6位验证码。",
+    "verify_otp": "验证",
+    "resend_otp": "重新发送"
+  },
+  "explore": {
+    "landing_title": "收据与支出\n就在这里",
+    "landing_subtitle": "扫描收据、追踪支出、导出清晰报告 — 告别纸质堆积。",
+    "what_we_do": "我们的功能",
+    "chip_scan": "AI 扫描",
+    "chip_reports": "报告",
+    "chip_cloud": "云同步",
+    "chip_export": "Excel 导出",
+    "preview_scan": "AI 收据扫描，即时提取商店、项目、税额和总额。",
+    "preview_reports": "分类报告和月度趋势，清晰掌握财务状况。",
+    "preview_sync": "安全云同步，跨设备备份您的数据。",
+    "preview_export": "将筛选后的支出导出为 Excel，便于会计和审计。",
+    "explore_cta": "探索 ➔",
+    "landing_hint": "点击探索了解功能介绍。",
+    "skip": "跳过",
+    "next": "下一步",
+    "get_started": "开始使用",
+    "already_have_account": "已有账户",
+    "slide1_title": "扫描任何收据。\n即时结构化。",
+    "slide1_body": "对准收据拍照 — AI 将在数秒内提取商户、日期、明细、税额和总额。",
+    "slide2_title": "清晰易懂的\n报告。",
+    "slide2_body": "按月份、类别或商店筛选。一目了然地查看支出趋势和分类明细。",
+    "slide3_title": "安全\n设计。",
+    "slide3_body": "收据图片存储在私有 AWS 存储中。数据通过 Supabase 认证和行级安全保护。",
+    "slide4_title": "准备好掌控\n财务了吗？",
+    "slide4_body": "开始 14 天免费试用。扫描收据、生成报告并导出 Excel — 尽在一个应用中。"
+  },
+  "profile": {
+    "title": "个人资料",
+    "first_name": "名字",
+    "last_name": "姓氏",
+    "phone": "电话",
+    "save_changes": "保存更改",
+    "subscriptions": "订阅管理",
+    "privacy": "隐私政策",
+    "language": "语言设置",
+    "edit_photo": "点击更换照片"
+  },
+  "premium": {
+    "upgrade": "升级到高级版",
+    "unlock": "开启高级分析、自定义报告和1个月免费试用。",
+    "maybe_later": "稍后再说",
+    "restore": "恢复购买",
+    "best_value": "最划算"
+  },
+  "months": {
+    "all": "全部",
+    "jan": "一月", "feb": "二月", "mar": "三月", "apr": "四月", "may": "五月", "jun": "六月",
+    "jul": "七月", "aug": "八月", "sep": "九月", "oct": "十月", "nov": "十一月", "dec": "十二月"
+  },
+  "reports": {
+    "title": "财务报告",
+    "period": "时间周期",
+    "periods": {
+      "all": "所有时间",
+      "3m": "最近3个月",
+      "6m": "最近6个月",
+      "year": "今年",
+      "custom": "自定义范围"
+    },
+    "filter_category": "按类别筛选",
+    "filter_store": "商店名称",
+    "no_data": "未找到符合条件的记录。",
+    "export": "导出 Excel",
+    "loading": "正在加载报告...",
+    "total_spend": "总支出",
+    "receipts": "收据数量"
+  },
+  "manual_add": {
+    "title_new": "手动添加支出",
+    "title_edit": "编辑交易",
+    "transaction_detail": "交易详情",
+    "store": "商店名称",
+    "amount": "金额",
+    "date": "日期",
+    "category": "类别",
+    "items": "具体项目",
+    "tax": "税额",
+    "add_item": "添加新项",
+    "delete": "删除该项支出",
+    "item_name": "项目名称",
+    "qty": "数量",
+    "price": "价格"
+  },
+  "support": {
+    "title": "客户支持",
+    "subject": "主题",
+    "message": "内容",
+    "send": "发送消息",
+    "faq": "常见问题解答 (FAQ)"
+  },
+  "faqs": {
+    "q1": "如何扫描收据？", "a1": "点击“扫描收据”按钮并拍照或从相册选择。我们的AI将自动提取详细信息。",
+    "q2": "我可以手动添加支出吗？", "a2": "是的，点击主屏幕上的“手动添加”按钮即可在没有收据的情况下输入详情。",
+    "q3": "如何查看我的每月报告？", "a3": "点击“查看所有报告”以查看详细的支出明细和分析。",
+    "q4": "我的数据安全吗？", "a4": "我们使用行业标准加密和 Supabase 进行安全 data 存储。",
+    "q5": "如何删除支出记录？", "a5": "点击任何交易查看详情，然后点击垃圾桶图标将其删除。",
+    "q6": "可以离线使用吗？", "a6": "目前，需要互联网连接才能与我们的AI和数据库进行同步。",
+    "q7": "如何更改我的货币单位？", "a7": "货币首选项可以在“个人资料”部分设置（即将推出）。",
+    "q8": "如果AI漏掉了一个项目怎么办？", "a8": "您始终可以手动编辑交易详情或单个项目。",
+    "q9": "我可以导出我的数据吗？", "a9": "CSV 和 PDF 导出功能目前正在开发中。",
+    "q10": "如何重置密码？", "a10": "可以通过电子邮件从登录屏幕发起密码重置。"
+  }
+}

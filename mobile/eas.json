@@ -1,0 +1,40 @@
+{
+  "cli": {
+    "version": ">= 18.5.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "node": "20.18.0",
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "node": "20.18.0",
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      }
+    },
+    "production": {
+      "node": "20.18.0",
+      "distribution": "store",
+      "autoIncrement": true,
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_USE_PRECOMPILED_MODULES": "0"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascApiKeyPath": "../GoodtoGo/AuthKey.p8",
+        "ascApiKeyIssuerId": "138bd8ae-ea40-4c7b-a543-2964deb4a55b",
+        "ascApiKeyId": "VTVNRS996B"
+      }
+    }
+  }
+}

@@ -1,10 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { supabase } from '../lib/supabase';
 
-// Use the exact JWT Key found in the backend .env
-const JWT_SECRET = process.env.Jwt_Key;
-
-export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: No token provided' });
@@ -13,17 +10,21 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
   const token = authHeader.split(' ')[1];
 
   try {
-    if (!JWT_SECRET) {
-      throw new Error('JWT Secret is missing in the environment variables');
+    // We use the Supabase client to verify the user from the token
+    // This handles any algorithm (HS256/RS256/ES256) automatically
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      console.error('Auth Error:', error?.message || 'User not found');
+      return res.status(403).json({ error: 'Forbidden: Invalid or expired token' });
     }
     
-    // Supabase JWTs use RS256 or HS256 depending on config, usually HS256 with the app's JWT secret
-    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
-    
-    // Attach the decoded Supabase User object to req for downstream usage
-    (req as any).user = decoded; 
+    // Attach the user to the request for downstream usage
+    // We map 'sub' to 'id' for compatibility with existing code if needed
+    (req as any).user = { ...user, sub: user.id }; 
     next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Forbidden: Invalid or expired token' });
+  } catch (err: any) {
+    console.error('Unexpected Auth Error:', err.message);
+    return res.status(403).json({ error: 'Forbidden: Authentication failed' });
   }
 };

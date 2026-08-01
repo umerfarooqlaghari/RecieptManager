@@ -30,3 +30,8 @@ mobile/android/
 mobile/ios/
 mobile/web-build/
 mobile/dist/
+
+# Next.js marketing site
+web/node_modules/
+web/.next/
+web/out/
