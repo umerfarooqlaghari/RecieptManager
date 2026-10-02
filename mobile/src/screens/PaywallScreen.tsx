@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Alert, Dimensions, Platform } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Alert, Dimensions, Platform, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -259,9 +259,20 @@ export default function PaywallScreen({ onClose, isForced = false }: PaywallScre
             <TouchableOpacity onPress={handleRestore} disabled={isPurchasing}>
               <Text style={[styles.footerLink, { color: theme.textDim }]}>{t('premium.restore')}</Text>
             </TouchableOpacity>
+            
+            <View style={styles.legalLinksRow}>
+              <TouchableOpacity onPress={() => Linking.openURL('https://alpha-devs.cloud/privacy/').catch(() => Alert.alert('Privacy Policy', 'Visit https://alpha-devs.cloud/privacy/'))}>
+                <Text style={[styles.legalLinkText, { color: '#8b5cf6' }]}>Privacy Policy</Text>
+              </TouchableOpacity>
+              <Text style={[styles.legalDivider, { color: theme.textDim }]}>•</Text>
+              <TouchableOpacity onPress={() => Linking.openURL('https://alpha-devs.cloud/terms/').catch(() => Alert.alert('Terms of Use', 'Visit https://alpha-devs.cloud/terms/'))}>
+                <Text style={[styles.legalLinkText, { color: '#8b5cf6' }]}>Terms of Use (EULA)</Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.footerDivider} />
             <Text style={[styles.footerText, { color: theme.textDim }]}>
-              Secure payment via App Store. Cancel anytime.
+              Payment charged to your Apple ID account at confirmation of purchase. Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in App Store Account Settings.
             </Text>
           </View>
         </ScrollView>
@@ -438,6 +449,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  legalLinksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
+  legalLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  legalDivider: {
+    fontSize: 13,
+    opacity: 0.5,
   },
   footerDivider: {
     height: 1,

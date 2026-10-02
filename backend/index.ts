@@ -251,7 +251,7 @@ app.get('/api/expenses', requireAuth, async (req: Request, res: Response) => {
 app.get('/api/expenses/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const accessToken = req.headers.authorization?.split(' ')[1] || '';
-    const result = await expenseService.getExpense(accessToken, req.params.id);
+    const result = await expenseService.getExpense(accessToken, req.params.id as string);
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -262,7 +262,7 @@ app.get('/api/expenses/:id', requireAuth, async (req: Request, res: Response) =>
 app.put('/api/expenses/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const accessToken = req.headers.authorization?.split(' ')[1] || '';
-    const result = await expenseService.updateExpense(accessToken, req.params.id, req.body);
+    const result = await expenseService.updateExpense(accessToken, req.params.id as string, req.body);
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -273,7 +273,7 @@ app.put('/api/expenses/:id', requireAuth, async (req: Request, res: Response) =>
 app.delete('/api/expenses/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const accessToken = req.headers.authorization?.split(' ')[1] || '';
-    const result = await expenseService.deleteExpense(accessToken, req.params.id);
+    const result = await expenseService.deleteExpense(accessToken, req.params.id as string);
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -354,7 +354,7 @@ app.post('/api/profile/picture', requireAuth, async (req: Request, res: Response
 app.get('/api/expenses/:id/receipt-url', requireAuth, async (req: Request, res: Response) => {
   try {
     const accessToken = req.headers.authorization?.split(' ')[1] || '';
-    const expense = await expenseService.getExpense(accessToken, req.params.id);
+    const expense = await expenseService.getExpense(accessToken, req.params.id as string);
 
     if (!expense.receipt_image_key) {
       return res.status(404).json({ error: 'No receipt image found for this expense' });

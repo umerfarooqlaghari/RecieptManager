@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 import { MobileNav } from './components/MobileNav';
 import {
   IconChart,
@@ -21,7 +22,9 @@ const navLinks = [
   { href: '#home', label: 'Home' },
   { href: '#about', label: 'About' },
   { href: '#services', label: 'Services' },
-  { href: '#contact', label: 'Contact' },
+  { href: '/support/', label: 'Support' },
+  { href: '/privacy/', label: 'Privacy' },
+  { href: '/terms/', label: 'Terms' },
 ];
 
 const checklist = [
@@ -301,7 +304,7 @@ export default function HomePage() {
       </main>
 
       <footer className="footer">
-        <div className="container footer-inner">
+        <div className="container footer-inner" style={{ flexWrap: 'wrap', gap: '24px' }}>
           <div className="footer-brand">
             <div className="logo">
               <span className="logo-icon">
@@ -311,6 +314,14 @@ export default function HomePage() {
             </div>
             <p className="footer-copy">© {new Date().getFullYear()} Expense Manager. All rights reserved.</p>
           </div>
+
+          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center', fontSize: '0.9rem' }}>
+            <Link href="/privacy/" style={{ color: 'var(--text-muted)' }}>Privacy Policy</Link>
+            <Link href="/terms/" style={{ color: 'var(--text-muted)' }}>Terms of Use (EULA)</Link>
+            <Link href="/support/" style={{ color: 'var(--text-muted)' }}>Support</Link>
+            <Link href="/delete-account/" style={{ color: 'var(--text-muted)' }}>Account Deletion</Link>
+          </div>
+
           <p className="footer-credit">
             Developed by{' '}
             <a href={ALPHA_DEVS_URL} target="_blank" rel="noopener noreferrer">

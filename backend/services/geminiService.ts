@@ -37,11 +37,10 @@ export async function analyzeReceipt(imageBuffer: Buffer, mimeType: string = 'im
     `;
 
   const models = [
-    "gemini-2.0-flash",           // Stable flash (primary)
-    "gemini-2.5-flash-preview-04-17", // 2.5 preview
-    "gemini-1.5-flash-latest",    // 1.5 Flash
-    "gemini-1.5-pro-latest",      // 1.5 Pro (higher quality, slower)
-    "gemini-2.0-flash-lite",      // Lite fallback
+    "gemini-3.8-flash",           // Primary flash model
+    "gemini-3.7-flash",           // Fast fallback
+    "gemini-3.6-flash",           // Fallback
+    "gemini-3.5-flash",           // Fallback
   ];
 
   let lastError: any;

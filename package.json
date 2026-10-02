@@ -1,0 +1,17 @@
+{
+  "name": "receipt-manager-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Expense / Receipt Manager monorepo containing backend, web, mobile, and test projects.",
+  "scripts": {
+    "start": "node start-all.mjs",
+    "dev": "node start-all.mjs",
+    "dev:bash": "./start-all.sh",
+    "install:all": "npm --prefix backend install && npm --prefix web install && npm --prefix mobile install && npm --prefix backend-tests install",
+    "test:backend": "npm --prefix backend-tests test",
+    "push:testflight": "./push-to-testflight.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
