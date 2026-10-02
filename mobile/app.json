@@ -48,8 +48,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "4bd7f9f5-b9c2-42ec-85f1-f6360573a833"
+        "projectId": "ed540f0a-df81-4350-a716-3e0e9fce77f8"
       }
-    }
+    },
+    "owner": "umer.farooq"
   }
 }

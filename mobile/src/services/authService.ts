@@ -1,4 +1,4 @@
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const BACKEND_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || '').replace(/\/$/, '');
 
 export async function sendSignupOtp(email: string, userId: string) {
   const response = await fetch(`${BACKEND_URL}/api/auth/send-otp`, {

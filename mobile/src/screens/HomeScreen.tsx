@@ -239,7 +239,7 @@ export default function HomeScreen() {
     if (!base64) return;
     setScanning(true);
 
-    const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
+    const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || '').replace(/\/$/, '');
     console.log(`\n========== [SCAN] Starting Receipt Scan ==========`);
     console.log(`[SCAN] Backend URL: ${backendUrl}`);
     console.log(`[SCAN] MIME type: ${mimeType}`);
