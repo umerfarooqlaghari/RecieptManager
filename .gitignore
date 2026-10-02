@@ -35,3 +35,8 @@ mobile/dist/
 web/node_modules/
 web/.next/
 web/out/
+push-to-testflight.sh
+start-all.mjs
+.gitignore
+backend-tests/.env.example
+start-all.sh
