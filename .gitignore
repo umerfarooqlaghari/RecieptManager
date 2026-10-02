@@ -40,3 +40,5 @@ start-all.mjs
 .gitignore
 backend-tests/.env.example
 start-all.sh
+mobile/eas.json
+mobile/eas.json

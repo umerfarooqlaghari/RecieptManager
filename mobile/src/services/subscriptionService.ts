@@ -38,7 +38,7 @@ function resolveApiKey(): string {
   return IOS_KEY || TEST_STORE_KEY;
 }
 
-export const ENTITLEMENT_ID = 'Expense Tracker Premium';
+export const ENTITLEMENT_ID = process.env.EXPO_PUBLIC_RC_ENTITLEMENT_ID || 'Expense Tracker Premium';
 export const ENTITLEMENT_ID_ALT = 'Expense Tracker Pro';
 
 export function hasPremiumEntitlement(info: { entitlements: { active: Record<string, unknown> } }): boolean {
