@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Animated, Dimensions, Alert, RefreshControl, ActivityIndicator, Image, TextInput, Modal, Platform, SafeAreaView, Linking } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../providers/AuthProvider';
@@ -6,6 +6,7 @@ import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { LineChart } from 'react-native-gifted-charts';
+import ItemSpendingChart from '../components/ItemSpendingChart';
 import { fetchExpenses, deleteExpense, updateExpense, getReceiptUrl, createExpense, submitSupport, uploadProfilePicture, exportExpensesExcel } from '../services/expenseService';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../providers/ThemeProvider';
@@ -62,8 +63,47 @@ export default function HomeScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
   const { t, i18n } = useTranslation();
   const [selectedMonth, setSelectedMonth] = useState('all');
+  const [selectedYear, setSelectedYear] = useState('all');
+  const [allExpenses, setAllExpenses] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [trendExpenses, setTrendExpenses] = useState<any[]>([]);
+
+  // Extract all distinct years from loaded expenses
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    allExpenses.forEach(e => {
+      if (e.date) {
+        const y = e.date.split('-')[0];
+        if (y && y.length === 4) years.add(y);
+      }
+    });
+    return Array.from(years).sort().reverse();
+  }, [allExpenses]);
+
+  // Client-side instant month and year filtering
+  const displayedExpenses = useMemo(() => {
+    if (!allExpenses || allExpenses.length === 0) return [];
+    return allExpenses.filter(e => {
+      if (!e.date) return false;
+      const parts = e.date.split('-');
+      if (parts.length < 2) return false;
+
+      // Filter by Month
+      if (selectedMonth !== 'all') {
+        const targetMonth = MONTH_KEYS.indexOf(selectedMonth); // 1 for jan, 7 for jul, etc.
+        const m = parseInt(parts[1], 10);
+        if (m !== targetMonth) return false;
+      }
+
+      // Filter by Year
+      if (selectedYear !== 'all') {
+        const y = parts[0];
+        if (y !== selectedYear) return false;
+      }
+
+      return true;
+    });
+  }, [allExpenses, selectedMonth, selectedYear]);
   const [refreshing, setRefreshing] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -128,12 +168,12 @@ export default function HomeScreen() {
     });
   }, []);
 
-  // Load expenses when session or selected month changes
+  // Load expenses when session changes
   useEffect(() => {
     if (session?.access_token) {
       loadExpenses();
     }
-  }, [session, selectedMonth]);
+  }, [session]);
 
   // Load categories once on sign-in; show paywall only after RC has finished loading
   useEffect(() => {
@@ -181,19 +221,10 @@ export default function HomeScreen() {
     const isRefresh = !!opts?.isRefresh;
     if (isRefresh) setRefreshing(true);
     else setIsMainLoading(true);
-    if (!isRefresh) setExpenses([]);
     try {
-      let from: string | undefined;
-      let to: string | undefined;
-
-      if (selectedMonth !== 'all') {
-        const monthIndex = MONTH_KEYS.indexOf(selectedMonth) - 1;
-        const year = new Date().getFullYear();
-        ({ from, to } = monthRange(year, monthIndex));
-      }
-
-      const data = await fetchExpenses(session?.access_token || '', { from, to });
-      setExpenses(data);
+      const data = await fetchExpenses(session?.access_token || '');
+      setAllExpenses(data || []);
+      setExpenses(data || []);
 
       // Auto-adopt expense currency if user has not explicitly configured a currency preference
       if (data && data.length > 0) {
@@ -598,12 +629,14 @@ export default function HomeScreen() {
 
   const getCategoryStats = () => {
     const stats: { [key: string]: { amount: number; name: string; color: string } } = {};
-    expenses.forEach(exp => {
+    const source = displayedExpenses.length > 0 ? displayedExpenses : allExpenses;
+    source.forEach(exp => {
       const catId = exp.categories?.id || 'other';
       if (!stats[catId]) {
         stats[catId] = { amount: 0, name: exp.categories?.name || 'Other', color: exp.categories?.color || '#3b82f6' };
       }
-      stats[catId].amount += toAmount(exp.amount);
+      const converted = convertCurrencyLocally(toAmount(exp.amount), exp.currency || 'USD', selectedCurrency);
+      stats[catId].amount += converted;
     });
     return Object.values(stats).sort((a, b) => b.amount - a.amount);
   };
@@ -611,7 +644,7 @@ export default function HomeScreen() {
   const getMonthlyTrendData = () => {
     const data: any[] = [];
     const now = new Date();
-    const source = trendExpenses.length > 0 ? trendExpenses : expenses;
+    const source = allExpenses.length > 0 ? allExpenses : expenses;
 
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -622,7 +655,8 @@ export default function HomeScreen() {
 
       const mTotal = source.reduce((s, e) => {
         const ed = new Date(e.date + 'T12:00:00');
-        return (ed >= mStart && ed <= mEnd && !e.is_income) ? s + toAmount(e.amount) : s;
+        const converted = convertCurrencyLocally(toAmount(e.amount), e.currency || 'USD', selectedCurrency);
+        return (ed >= mStart && ed <= mEnd && !e.is_income) ? s + converted : s;
       }, 0);
 
       data.push({ value: mTotal, label: label });
@@ -631,8 +665,11 @@ export default function HomeScreen() {
   };
 
   const getAdvancedStats = () => {
-    const spending = expenses.filter(e => !e.is_income);
-    const total = spending.reduce((s, e) => s + toAmount(e.amount), 0);
+    const source = displayedExpenses.length > 0 ? displayedExpenses : allExpenses;
+    const spending = source.filter(e => !e.is_income);
+    const total = spending.reduce((s, e) => {
+      return s + convertCurrencyLocally(toAmount(e.amount), e.currency || 'USD', selectedCurrency);
+    }, 0);
     let days = 1;
     if (spending.length > 1) {
       const timestamps = spending.map(e => new Date(e.date + 'T12:00:00').getTime());
@@ -683,7 +720,7 @@ export default function HomeScreen() {
     ]);
   };
 
-  const totalSpend = expenses.reduce((acc, c) => {
+  const totalSpend = displayedExpenses.reduce((acc, c) => {
     if (c.is_income) return acc;
     const amt = toAmount(c.amount);
     const cCur = c.currency || selectedCurrency;
@@ -738,36 +775,60 @@ export default function HomeScreen() {
           <TouchableOpacity onPress={() => setShowSettings(true)} style={[styles.settingsBtn, { backgroundColor: theme.card }]}><Ionicons name="settings-outline" size={24} color={theme.text} /></TouchableOpacity>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.monthSelector}>
-          {MONTH_KEYS.map(m => (
+        <View style={styles.monthSelectorContainer}>
+          {availableYears.length > 1 && (
             <TouchableOpacity
-              key={m}
-              onPress={() => setSelectedMonth(m)}
               style={[
-                styles.monthItem,
+                styles.yearBadge,
                 {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-                  borderWidth: 1,
-                  borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
-                },
-                selectedMonth === m && {
-                  backgroundColor: isDark ? '#fff' : '#0f172a',
-                  borderColor: isDark ? '#fff' : '#0f172a',
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                  borderColor: theme.border,
                 }
               ]}
+              onPress={() => {
+                const options = ['all', ...availableYears];
+                const nextIdx = (options.indexOf(selectedYear) + 1) % options.length;
+                setSelectedYear(options[nextIdx]);
+              }}
             >
-              <Text
-                style={[
-                  styles.monthText,
-                  { color: isDark ? '#a1a1aa' : '#64748b' },
-                  selectedMonth === m && { color: isDark ? '#09090b' : '#ffffff', fontWeight: '700' }
-                ]}
-              >
-                {t(`months.${m}`)}
+              <Ionicons name="calendar-outline" size={13} color="#8b5cf6" />
+              <Text style={[styles.yearBadgeText, { color: theme.text }]}>
+                {selectedYear === 'all' ? 'All Yrs' : selectedYear}
               </Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+          )}
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.monthSelector}>
+            {MONTH_KEYS.map(m => (
+              <TouchableOpacity
+                key={m}
+                onPress={() => setSelectedMonth(m)}
+                style={[
+                  styles.monthItem,
+                  {
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+                  },
+                  selectedMonth === m && {
+                    backgroundColor: isDark ? '#fff' : '#0f172a',
+                    borderColor: isDark ? '#fff' : '#0f172a',
+                  }
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.monthText,
+                    { color: isDark ? '#a1a1aa' : '#64748b' },
+                    selectedMonth === m && { color: isDark ? '#09090b' : '#ffffff', fontWeight: '700' }
+                  ]}
+                >
+                  {t(`months.${m}`)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
 
         <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -872,6 +933,17 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Quick Item Spending Trends Chart right on HomeScreen */}
+        {allExpenses.length > 0 && (
+          <ItemSpendingChart
+            expenses={allExpenses}
+            currencySymbol={currencySymbol}
+            selectedCurrency={selectedCurrency}
+            isDark={isDark}
+            theme={theme}
+          />
+        )}
+
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('home.transactions')}</Text>
           {isMainLoading && <ActivityIndicator color={theme.button} style={{ marginLeft: 10 }} />}
@@ -879,10 +951,17 @@ export default function HomeScreen() {
 
         {isMainLoading ? (
           <View style={styles.emptyContainer}><ActivityIndicator color="#3b82f6" size="large" /></View>
-        ) : expenses.length === 0 ? (
-          <View style={styles.emptyContainer}><Text style={styles.emptyText}>{t('home.no_transactions')}</Text></View>
+        ) : displayedExpenses.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="receipt-outline" size={38} color={theme.textDim} style={{ marginBottom: 8 }} />
+            <Text style={styles.emptyText}>
+              {selectedMonth === 'all'
+                ? t('home.no_transactions')
+                : `No expenses found for ${t(`months.${selectedMonth}`)}`}
+            </Text>
+          </View>
         ) : (
-          expenses.map((e) => (
+          displayedExpenses.map((e) => (
             <TouchableOpacity key={e.id} style={styles.txCard} onPress={() => handlePressTransaction(e)}>
               <BlurView intensity={isDark ? 30 : 100} tint={isDark ? "light" : "default"} style={[styles.txBlur, { backgroundColor: theme.card }]}>
                 <View style={[styles.txIcon, { backgroundColor: (e.categories?.color || '#3b82f6') + '25' }]}>
@@ -1242,57 +1321,13 @@ export default function HomeScreen() {
               <TouchableOpacity onPress={() => setIsVisualizeVisible(false)}><Ionicons name="close" size={24} color={theme.text} /></TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 24 }}>
-              <View style={styles.chartTitleContainer}>
-                <Text style={[styles.visualCardTitle, { color: theme.text }]}>Monthly Spending Trend</Text>
-                <Text style={[styles.chartSubtitle, { color: theme.textDim }]}>Last 6 Months</Text>
-              </View>
-
-              <View style={[styles.chartWrapper, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                {expenses.length > 0 ? (
-                  <LineChart
-                    areaChart
-                    curved
-                    data={getMonthlyTrendData()}
-                    width={width - 120}
-                    height={180}
-                    spacing={(width - 160) / 5}
-                    initialSpacing={20}
-                    color="#8b5cf6"
-                    thickness={3}
-                    startFillColor="rgba(139, 92, 246, 0.3)"
-                    endFillColor="rgba(6, 182, 212, 0.05)"
-                    startOpacity={0.4}
-                    endOpacity={0.0}
-                    noOfSections={4}
-                    yAxisColor="transparent"
-                    yAxisThickness={0}
-                    rulesColor={isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)"}
-                    rulesType="solid"
-                    xAxisColor={isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"}
-                    pointerConfig={{
-                      pointerStripHeight: 160,
-                      pointerStripColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
-                      pointerStripWidth: 2,
-                      pointerColor: '#8b5cf6',
-                      radius: 6,
-                      pointerLabelComponent: (items: any) => {
-                        return (
-                          <View style={{ backgroundColor: isDark ? '#18181b' : '#ffffff', padding: 8, borderRadius: 8, borderWidth: 1, borderColor: theme.border }}>
-                            <Text style={{ color: theme.text, fontWeight: 'bold' }}>{currencySymbol}{formatMoney(items[0].value, 0)}</Text>
-                          </View>
-                        );
-                      },
-                    }}
-                    yAxisTextStyle={{ color: theme.textDim, fontSize: 10 }}
-                    xAxisLabelTextStyle={{ color: theme.textDim, fontSize: 10, textAlign: 'center' }}
-                    yAxisLabelPrefix={currencySymbol}
-                    hideDataPoints
-                    rulesLength={width - 120}
-                  />
-                ) : (
-                  <View style={styles.emptyChart}><Text style={{ color: theme.textDim }}>Insufficient data for trends</Text></View>
-                )}
-              </View>
+              <ItemSpendingChart
+                expenses={allExpenses.length > 0 ? allExpenses : displayedExpenses}
+                currencySymbol={currencySymbol}
+                selectedCurrency={selectedCurrency}
+                isDark={isDark}
+                theme={theme}
+              />
 
               <View style={[styles.visualCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <Text style={[styles.visualCardTitle, { color: theme.text }]}>Spending by Category</Text>
@@ -1792,7 +1827,26 @@ const styles = StyleSheet.create({
   welcomeText: { color: '#a1a1aa', fontSize: 14 },
   nameText: { color: '#fff', fontSize: 28, fontWeight: '800' },
   settingsBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
-  monthSelector: { marginBottom: 25 },
+  monthSelectorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  yearBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  yearBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  monthSelector: { flex: 1 },
   monthItem: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: 'rgba(255,255,255,0.05)' },
   monthActive: { backgroundColor: '#fff' },
   monthText: { color: '#a1a1aa', fontSize: 13, fontWeight: '600' },
