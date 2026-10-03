@@ -106,15 +106,28 @@ export function getCurrencyName(code?: string): string {
   }
 }
 
+const STORAGE_RATES_CACHE_KEY = '@currencies_rates_cache';
+let memoryRates: Record<string, number> | null = null;
+
 /**
  * Loads dynamic list of currencies from open API with cache & popular fallback
  */
 export async function fetchCurrencies(): Promise<Currency[]> {
   try {
-    // Check cached currencies
-    const cached = await AsyncStorage.getItem(STORAGE_CURRENCIES_CACHE_KEY);
-    if (cached) {
-      const parsed = JSON.parse(cached);
+    // Check cached currencies & rates
+    const [cachedList, cachedRates] = await Promise.all([
+      AsyncStorage.getItem(STORAGE_CURRENCIES_CACHE_KEY),
+      AsyncStorage.getItem(STORAGE_RATES_CACHE_KEY),
+    ]);
+
+    if (cachedRates) {
+      try {
+        memoryRates = JSON.parse(cachedRates);
+      } catch {}
+    }
+
+    if (cachedList) {
+      const parsed = JSON.parse(cachedList);
       if (Array.isArray(parsed) && parsed.length > 0) {
         // Return cached and refresh in background
         refreshCurrenciesInBackground();
@@ -132,6 +145,9 @@ async function fetchAndCacheCurrencies(): Promise<Currency[]> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data && data.rates) {
+      memoryRates = data.rates;
+      await AsyncStorage.setItem(STORAGE_RATES_CACHE_KEY, JSON.stringify(data.rates)).catch(() => {});
+
       const codes = Object.keys(data.rates);
       const list: Currency[] = codes.map(code => ({
         code: code.toUpperCase(),
@@ -159,6 +175,37 @@ async function fetchAndCacheCurrencies(): Promise<Currency[]> {
 
 function refreshCurrenciesInBackground() {
   fetchAndCacheCurrencies().catch(() => {});
+}
+
+/**
+ * Converts an amount from one currency to another using local rates
+ */
+export function convertCurrencyLocally(amount: number, fromCurrency?: string, toCurrency?: string): number {
+  if (!amount || isNaN(amount)) return 0;
+  const from = (fromCurrency || 'USD').toUpperCase().trim();
+  const to = (toCurrency || 'USD').toUpperCase().trim();
+  if (from === to) return amount;
+  if (!memoryRates) return amount;
+
+  const rateFrom = memoryRates[from] || 1;
+  const rateTo = memoryRates[to] || 1;
+
+  // 1 USD = rateFrom [FROM], so 1 [FROM] = 1 / rateFrom USD
+  // 1 USD = rateTo [TO], so 1 [FROM] = rateTo / rateFrom [TO]
+  const converted = amount * (rateTo / rateFrom);
+  return Math.round(converted * 100) / 100;
+}
+
+/**
+ * Check if the user has explicitly set a currency preference
+ */
+export async function hasUserSetCurrency(): Promise<boolean> {
+  try {
+    const saved = await AsyncStorage.getItem(STORAGE_CURRENCY_KEY);
+    return !!(saved && saved.trim());
+  } catch {
+    return false;
+  }
 }
 
 /**

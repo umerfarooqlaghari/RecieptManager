@@ -13,7 +13,7 @@ import PaywallScreen from './PaywallScreen';
 import { formatMoney, toAmount } from '../utils/money';
 import { monthRange, toLocalDateString } from '../utils/dates';
 import { initNotifications, registerForNotifications, notifyExpenseLogged } from '../services/notificationService';
-import { Currency, fetchCurrencies, getCurrencySymbol, getUserCurrency, setUserCurrency } from '../services/currencyService';
+import { Currency, fetchCurrencies, getCurrencySymbol, getUserCurrency, setUserCurrency, convertCurrencyLocally, hasUserSetCurrency } from '../services/currencyService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -194,6 +194,19 @@ export default function HomeScreen() {
 
       const data = await fetchExpenses(session?.access_token || '', { from, to });
       setExpenses(data);
+
+      // Auto-adopt expense currency if user has not explicitly configured a currency preference
+      if (data && data.length > 0) {
+        hasUserSetCurrency().then(hasSet => {
+          if (!hasSet) {
+            const firstCur = data[0].currency;
+            if (firstCur && firstCur !== selectedCurrency) {
+              setSelectedCurrency(firstCur);
+              setUserCurrency(firstCur);
+            }
+          }
+        });
+      }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to load expenses');
     } finally {
@@ -670,8 +683,18 @@ export default function HomeScreen() {
     ]);
   };
 
-  const totalSpend = expenses.reduce((acc, c) => acc + (c.is_income ? 0 : toAmount(c.amount)), 0);
-  const reportTotal = reportExpenses.reduce((acc, c) => acc + (c.is_income ? 0 : toAmount(c.amount)), 0);
+  const totalSpend = expenses.reduce((acc, c) => {
+    if (c.is_income) return acc;
+    const amt = toAmount(c.amount);
+    const cCur = c.currency || selectedCurrency;
+    return acc + convertCurrencyLocally(amt, cCur, selectedCurrency);
+  }, 0);
+  const reportTotal = reportExpenses.reduce((acc, c) => {
+    if (c.is_income) return acc;
+    const amt = toAmount(c.amount);
+    const cCur = c.currency || selectedCurrency;
+    return acc + convertCurrencyLocally(amt, cCur, selectedCurrency);
+  }, 0);
   const paywallForced = !isPremium && trialDaysLeft <= 0;
 
   return (
@@ -747,7 +770,19 @@ export default function HomeScreen() {
         </ScrollView>
 
         <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
-          <Text style={[styles.statLabel, { color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)' }]}>{selectedMonth === 'all' ? t('home.total_balance') : `${t(`months.${selectedMonth}`)} ${t('home.spending')}`}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={[styles.statLabel, { color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)' }]}>
+              {selectedMonth === 'all' ? t('home.total_balance') : `${t(`months.${selectedMonth}`)} ${t('home.spending')}`}
+            </Text>
+            <TouchableOpacity
+              style={[styles.currencyPill, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)', borderColor: theme.border }]}
+              onPress={() => setIsCurrencyPickerVisible(true)}
+            >
+              <Ionicons name="cash-outline" size={13} color="#10b981" />
+              <Text style={[styles.currencyPillText, { color: theme.text }]}>{selectedCurrency}</Text>
+              <Ionicons name="chevron-down" size={11} color={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'} />
+            </TouchableOpacity>
+          </View>
           <Text style={[styles.statValue, { color: theme.text }]}>{currencySymbol} {formatMoney(totalSpend)}</Text>
         </View>
 
@@ -850,9 +885,29 @@ export default function HomeScreen() {
           expenses.map((e) => (
             <TouchableOpacity key={e.id} style={styles.txCard} onPress={() => handlePressTransaction(e)}>
               <BlurView intensity={isDark ? 30 : 100} tint={isDark ? "light" : "default"} style={[styles.txBlur, { backgroundColor: theme.card }]}>
-                <View style={[styles.txIcon, { backgroundColor: e.categories?.color + '40' || '#3b82f640' }]}><Ionicons name={e.categories?.icon || 'card'} size={20} color={isDark ? "#fff" : theme.text} /></View>
-                <View style={{ flex: 1 }}><Text style={[styles.txStore, { color: theme.text }]}>{e.store_name || 'N/A'}</Text><Text style={[styles.txDate, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>{new Date(e.date).toLocaleDateString()}</Text></View>
-                <Text style={[styles.txAmount, { color: theme.text }]}>{getCurrencySymbol(e.currency || selectedCurrency)} {formatMoney(e.amount)}</Text>
+                <View style={[styles.txIcon, { backgroundColor: (e.categories?.color || '#3b82f6') + '25' }]}>
+                  <Ionicons name={(e.categories?.icon || 'card') as any} size={20} color={e.categories?.color || (isDark ? "#fff" : theme.text)} />
+                </View>
+                <View style={styles.txContent}>
+                  <View style={styles.txTopRow}>
+                    <Text style={[styles.txStore, { color: theme.text }]} numberOfLines={1} ellipsizeMode="tail">
+                      {e.store_name || 'N/A'}
+                    </Text>
+                    <Text style={[styles.txAmount, { color: theme.text }]}>
+                      {getCurrencySymbol(e.currency || selectedCurrency)} {formatMoney(e.amount)}
+                    </Text>
+                  </View>
+                  <View style={styles.txBottomRow}>
+                    <Text style={[styles.txDate, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>
+                      {new Date(e.date).toLocaleDateString()}
+                    </Text>
+                    {e.categories?.name && (
+                      <Text style={[styles.txCategoryTag, { color: e.categories?.color || theme.textDim }]}>
+                        {e.categories.name}
+                      </Text>
+                    )}
+                  </View>
+                </View>
               </BlurView>
             </TouchableOpacity>
           ))
@@ -1755,11 +1810,28 @@ const styles = StyleSheet.create({
   emptyContainer: { padding: 40, alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: '#71717a', fontSize: 14, textAlign: 'center' },
   txCard: { marginBottom: 10, borderRadius: 16, overflow: 'hidden' },
-  txBlur: { flexDirection: 'row', alignItems: 'center', padding: 12 },
-  txIcon: { width: 42, height: 42, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  txStore: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  txBlur: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+  txIcon: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  txContent: { flex: 1, justifyContent: 'center' },
+  txTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  txStore: { flex: 1, color: '#fff', fontWeight: '600', fontSize: 15, marginRight: 12 },
+  txAmount: { color: '#fff', fontWeight: '700', fontSize: 15, textAlign: 'right' },
+  txBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
   txDate: { color: '#71717a', fontSize: 12 },
-  txAmount: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  txCategoryTag: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
+  currencyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  currencyPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
   sheetContainer: { backgroundColor: '#09090b', height: height * 0.9, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 20, borderTopWidth: 1, borderColor: '#27272a' },
   sheetHeader: { alignItems: 'center', marginBottom: 20 },
