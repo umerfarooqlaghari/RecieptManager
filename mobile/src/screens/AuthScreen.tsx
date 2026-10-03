@@ -61,15 +61,19 @@ export default function AuthScreen({ onBack }: { onBack?: () => void }) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) Alert.alert('Login Failed', error.message);
       } else {
-        if (!firstName || !lastName || !phone) {
-          Alert.alert('Hold up', 'Please fill in all your details to create an account.');
+        if (!firstName || !lastName) {
+          Alert.alert('Hold up', 'Please enter your first and last name.');
           return;
         }
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { first_name: firstName, last_name: lastName, phone },
+            data: {
+              first_name: firstName.trim(),
+              last_name: lastName.trim(),
+              ...(phone.trim() ? { phone: phone.trim() } : {}),
+            },
           },
         });
         if (error) {
@@ -323,7 +327,7 @@ export default function AuthScreen({ onBack }: { onBack?: () => void }) {
                       <Ionicons name="call-outline" size={24} color={theme.text} style={styles.icon} />
                       <TextInput
                         style={[styles.input, { color: theme.text }, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
-                        placeholder={t('profile.phone')}
+                        placeholder={`${t('profile.phone')} (optional)`}
                         placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
                         keyboardType="phone-pad"
                         value={phone}
