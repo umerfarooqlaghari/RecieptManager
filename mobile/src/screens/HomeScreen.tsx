@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Animated, Dimensions, Alert, RefreshControl, ActivityIndicator, Image, TextInput, Modal, Platform, SafeAreaView } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Animated, Dimensions, Alert, RefreshControl, ActivityIndicator, Image, TextInput, Modal, Platform, SafeAreaView, Linking } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../providers/AuthProvider';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import PaywallScreen from './PaywallScreen';
 import { formatMoney, toAmount } from '../utils/money';
 import { monthRange, toLocalDateString } from '../utils/dates';
 import { initNotifications, registerForNotifications, notifyExpenseLogged } from '../services/notificationService';
+import { Currency, fetchCurrencies, getCurrencySymbol, getUserCurrency, setUserCurrency } from '../services/currencyService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -81,6 +82,13 @@ export default function HomeScreen() {
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isMainLoading, setIsMainLoading] = useState(false);
 
+  // Currency State
+  const [selectedCurrency, setSelectedCurrency] = useState('USD');
+  const [currenciesList, setCurrenciesList] = useState<Currency[]>([]);
+  const [isCurrencyPickerVisible, setIsCurrencyPickerVisible] = useState(false);
+  const [currencySearchQuery, setCurrencySearchQuery] = useState('');
+  const currencySymbol = getCurrencySymbol(selectedCurrency);
+
   // Reports Sheet State
   const [isReportsVisible, setIsReportsVisible] = useState(false);
   const [reportPeriod, setReportPeriod] = useState('all');
@@ -111,6 +119,13 @@ export default function HomeScreen() {
     ]).start();
 
     initNotifications().then(() => registerForNotifications());
+
+    getUserCurrency().then(curr => {
+      if (curr) setSelectedCurrency(curr);
+    });
+    fetchCurrencies().then(list => {
+      if (list && list.length > 0) setCurrenciesList(list);
+    });
   }, []);
 
   // Load expenses when session or selected month changes
@@ -259,7 +274,7 @@ export default function HomeScreen() {
       const resp = await fetch(`${backendUrl}/api/scan-receipt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ imageBase64: base64, mimeType }),
+        body: JSON.stringify({ imageBase64: base64, mimeType, targetCurrency: selectedCurrency }),
         signal: controller.signal,
       });
 
@@ -335,7 +350,7 @@ export default function HomeScreen() {
     setEditedData({
       storeName: '',
       amount: '',
-      currency: 'USD',
+      currency: selectedCurrency || 'USD',
       date: toLocalDateString(new Date()),
       categoryId: categories.length > 0 ? categories[0].id : null,
       items: [],
@@ -363,7 +378,7 @@ export default function HomeScreen() {
         await createExpense(session?.access_token || '', {
           ...editedData,
           amount: amt,
-          currency: editedData.currency || 'USD',
+          currency: editedData.currency || selectedCurrency || 'USD',
           tax: parseFloat(editedData.tax || '0'),
           userId: session?.user?.id || '',
         });
@@ -399,16 +414,101 @@ export default function HomeScreen() {
     finally { setIsSubmittingSupport(false); }
   };
 
-  const openProfile = () => {
+  useEffect(() => {
+    if (session?.user) {
+      const meta = session.user.user_metadata || {};
+      if (meta.currency_preference) {
+        setSelectedCurrency(meta.currency_preference);
+        setUserCurrency(meta.currency_preference);
+      }
+      setProfileForm(prev => ({
+        ...prev,
+        firstName: meta.first_name || prev.firstName,
+        lastName: meta.last_name || prev.lastName,
+        phone: meta.phone || prev.phone,
+        email: session.user.email || prev.email,
+        avatar: meta.avatar_url || prev.avatar,
+      }));
+      supabase
+        .from('profiles')
+        .select('first_name, last_name, phone, currency_preference')
+        .eq('id', session.user.id)
+        .maybeSingle()
+        .then(
+          ({ data }) => {
+            if (data) {
+              setProfileForm(prev => ({
+                ...prev,
+                firstName: data.first_name || prev.firstName,
+                lastName: data.last_name || prev.lastName,
+                phone: data.phone || prev.phone,
+              }));
+              if (data.currency_preference) {
+                setSelectedCurrency(data.currency_preference);
+                setUserCurrency(data.currency_preference);
+              }
+            }
+          },
+          () => {}
+        );
+    }
+  }, [session]);
+
+  const openProfile = async () => {
     const meta = session?.user?.user_metadata || {};
-    setProfileForm({
-      firstName: meta.first_name || '',
-      lastName: meta.last_name || '',
-      phone: meta.phone || '',
-      email: session?.user?.email || '',
-      avatar: meta.avatar_url || ''
-    });
+    let firstName = meta.first_name || '';
+    let lastName = meta.last_name || '';
+    let phone = meta.phone || '';
+    let email = session?.user?.email || '';
+    let avatar = meta.avatar_url || '';
+
+    setProfileForm({ firstName, lastName, phone, email, avatar });
     setIsProfileVisible(true);
+
+    if (session?.user?.id) {
+      try {
+        const { data: dbProfile } = await supabase
+          .from('profiles')
+          .select('first_name, last_name, phone, currency_preference')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (dbProfile) {
+          setProfileForm(prev => ({
+            ...prev,
+            firstName: dbProfile.first_name || prev.firstName,
+            lastName: dbProfile.last_name || prev.lastName,
+            phone: dbProfile.phone || prev.phone,
+          }));
+          if (dbProfile.currency_preference) {
+            setSelectedCurrency(dbProfile.currency_preference);
+            setUserCurrency(dbProfile.currency_preference);
+          }
+        }
+      } catch (err) {
+        console.warn('Error fetching profile:', err);
+      }
+    }
+  };
+
+  const handleSelectCurrency = async (curr: Currency) => {
+    setSelectedCurrency(curr.code);
+    setIsCurrencyPickerVisible(false);
+    setCurrencySearchQuery('');
+    await setUserCurrency(curr.code);
+    if (session?.user?.id) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ currency_preference: curr.code })
+          .eq('id', session.user.id);
+        await supabase.auth.updateUser({
+          data: { currency_preference: curr.code }
+        });
+      } catch (e: any) {
+        console.warn('Failed to save currency preference to profile:', e?.message);
+      }
+    }
   };
 
   const pickAvatar = async () => {
@@ -617,42 +717,115 @@ export default function HomeScreen() {
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.monthSelector}>
           {MONTH_KEYS.map(m => (
-            <TouchableOpacity key={m} onPress={() => setSelectedMonth(m)} style={[styles.monthItem, selectedMonth === m && styles.monthActive]}>
-              <Text style={[styles.monthText, selectedMonth === m && styles.monthTextActive]}>{t(`months.${m}`)}</Text>
+            <TouchableOpacity
+              key={m}
+              onPress={() => setSelectedMonth(m)}
+              style={[
+                styles.monthItem,
+                {
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+                  borderWidth: 1,
+                  borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+                },
+                selectedMonth === m && {
+                  backgroundColor: isDark ? '#fff' : '#0f172a',
+                  borderColor: isDark ? '#fff' : '#0f172a',
+                }
+              ]}
+            >
+              <Text
+                style={[
+                  styles.monthText,
+                  { color: isDark ? '#a1a1aa' : '#64748b' },
+                  selectedMonth === m && { color: isDark ? '#09090b' : '#ffffff', fontWeight: '700' }
+                ]}
+              >
+                {t(`months.${m}`)}
+              </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
         <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
           <Text style={[styles.statLabel, { color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)' }]}>{selectedMonth === 'all' ? t('home.total_balance') : `${t(`months.${selectedMonth}`)} ${t('home.spending')}`}</Text>
-          <Text style={[styles.statValue, { color: theme.text }]}>$ {formatMoney(totalSpend)}</Text>
+          <Text style={[styles.statValue, { color: theme.text }]}>{currencySymbol} {formatMoney(totalSpend)}</Text>
         </View>
 
         <View style={styles.actionGrid}>
-          <TouchableOpacity style={[styles.actionSquare, { backgroundColor: '#11101eff' }, isLocked && { opacity: 0.6 }]} onPress={() => handlePremiumFeature(handleScanPress)}>
-            <View style={styles.actionIconContainer}>
-              {isLocked ? <Ionicons name="lock-closed" size={14} color="#f87171" /> : <Ionicons name="camera" size={14} color="#fff" />}
+          <TouchableOpacity
+            style={[
+              styles.actionSquare,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+                borderWidth: 1,
+              },
+              isLocked && { opacity: 0.6 }
+            ]}
+            onPress={() => handlePremiumFeature(handleScanPress)}
+          >
+            <View style={[styles.actionIconContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)' }]}>
+              {isLocked ? <Ionicons name="lock-closed" size={14} color="#f87171" /> : <Ionicons name="camera" size={14} color={theme.text} />}
             </View>
-            <Text style={styles.actionSmallText}>{t('common.all')}</Text>
-            <Text style={styles.actionBigText}>{t('home.scan_receipt')}</Text>
+            <Text style={[styles.actionSmallText, { color: isDark ? 'rgba(255,255,255,0.5)' : '#64748b' }]}>{t('common.all')}</Text>
+            <Text style={[styles.actionBigText, { color: theme.text }]}>{t('home.scan_receipt')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionSquare, { backgroundColor: '#11101eff' }, isLocked && { opacity: 0.6 }]} onPress={() => handlePremiumFeature(() => setIsReportsVisible(true))}>
-            <View style={styles.actionIconContainer}>
-               {isLocked ? <Ionicons name="lock-closed" size={14} color="#f87171" /> : <MaterialCommunityIcons name="file-chart" size={14} color="#fff" />}
+
+          <TouchableOpacity
+            style={[
+              styles.actionSquare,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+                borderWidth: 1,
+              },
+              isLocked && { opacity: 0.6 }
+            ]}
+            onPress={() => handlePremiumFeature(() => setIsReportsVisible(true))}
+          >
+            <View style={[styles.actionIconContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)' }]}>
+               {isLocked ? <Ionicons name="lock-closed" size={14} color="#f87171" /> : <MaterialCommunityIcons name="file-chart" size={14} color={theme.text} />}
             </View>
-            <Text style={styles.actionSmallText}>{t('common.all')}</Text>
-            <Text style={styles.actionBigText}>{t('home.view_reports')}</Text>
+            <Text style={[styles.actionSmallText, { color: isDark ? 'rgba(255,255,255,0.5)' : '#64748b' }]}>{t('common.all')}</Text>
+            <Text style={[styles.actionBigText, { color: theme.text }]}>{t('home.view_reports')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionSquare, { backgroundColor: '#11101eff' }]} onPress={handleAddManual}>
-            <View style={styles.actionIconContainer}><Ionicons name="add" size={16} color="#fff" /></View>
-            <Text style={styles.actionSmallText}>{t('common.all')}</Text>
-            <Text style={styles.actionBigText}>{t('home.add_manual')}</Text>
+
+          <TouchableOpacity
+            style={[
+              styles.actionSquare,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+                borderWidth: 1,
+              }
+            ]}
+            onPress={handleAddManual}
+          >
+            <View style={[styles.actionIconContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)' }]}>
+              <Ionicons name="add" size={16} color={theme.text} />
+            </View>
+            <Text style={[styles.actionSmallText, { color: isDark ? 'rgba(255,255,255,0.5)' : '#64748b' }]}>{t('common.all')}</Text>
+            <Text style={[styles.actionBigText, { color: theme.text }]}>{t('home.add_manual')}</Text>
           </TouchableOpacity>
         </View>
 
         <View style={[styles.actionGrid, { marginTop: -15 }]}>
           <TouchableOpacity
-            style={[styles.actionSquare, { width: '100%', height: 48, backgroundColor: '#11101eff', aspectRatio: undefined, justifyContent: 'center', alignItems: 'center', flexDirection: 'row' }, isLocked && { opacity: 0.6 }]}
+            style={[
+              styles.actionSquare,
+              {
+                width: '100%',
+                height: 48,
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+                borderWidth: 1,
+                aspectRatio: undefined,
+                justifyContent: 'center',
+                alignItems: 'center',
+                flexDirection: 'row',
+              },
+              isLocked && { opacity: 0.6 }
+            ]}
             onPress={() => handlePremiumFeature(() => setIsVisualizeVisible(true))}
           >
             {isLocked ? (
@@ -660,7 +833,7 @@ export default function HomeScreen() {
             ) : (
                <Ionicons name="pie-chart" size={18} color="#8b5cf6" style={{ marginRight: 10 }} />
             )}
-            <Text style={[styles.actionBigText, { marginTop: 0, color: '#fff' }]}>{t('home.visualize')}</Text>
+            <Text style={[styles.actionBigText, { marginTop: 0, color: theme.text }]}>{t('home.visualize')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -679,7 +852,7 @@ export default function HomeScreen() {
               <BlurView intensity={isDark ? 30 : 100} tint={isDark ? "light" : "default"} style={[styles.txBlur, { backgroundColor: theme.card }]}>
                 <View style={[styles.txIcon, { backgroundColor: e.categories?.color + '40' || '#3b82f640' }]}><Ionicons name={e.categories?.icon || 'card'} size={20} color={isDark ? "#fff" : theme.text} /></View>
                 <View style={{ flex: 1 }}><Text style={[styles.txStore, { color: theme.text }]}>{e.store_name || 'N/A'}</Text><Text style={[styles.txDate, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>{new Date(e.date).toLocaleDateString()}</Text></View>
-                <Text style={[styles.txAmount, { color: theme.text }]}>{e.currency || '$'} {formatMoney(e.amount)}</Text>
+                <Text style={[styles.txAmount, { color: theme.text }]}>{getCurrencySymbol(e.currency || selectedCurrency)} {formatMoney(e.amount)}</Text>
               </BlurView>
             </TouchableOpacity>
           ))
@@ -707,37 +880,99 @@ export default function HomeScreen() {
                   )}
                   <View style={styles.editIconBadge}><Ionicons name="camera" size={16} color="#fff" /></View>
                 </TouchableOpacity>
-                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginTop: 12 }}>Tap to change photo</Text>
+                <Text style={{ color: isDark ? 'rgba(255,255,255,0.5)' : '#64748b', fontSize: 13, marginTop: 12 }}>Tap to change photo</Text>
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.editLabel}>First Name</Text>
-                <TextInput style={styles.input} value={profileForm.firstName} onChangeText={t => setProfileForm({ ...profileForm, firstName: t })} />
+                <Text style={[styles.editLabel, { color: isDark ? '#a1a1aa' : '#64748b' }]}>First Name</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isDark ? '#18181b' : '#f8fafc',
+                      color: theme.text,
+                      borderColor: isDark ? '#27272a' : '#e2e8f0',
+                    },
+                    Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)
+                  ]}
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
+                  value={profileForm.firstName}
+                  onChangeText={t => setProfileForm({ ...profileForm, firstName: t })}
+                />
               </View>
               <View style={styles.formGroup}>
-                <Text style={styles.editLabel}>Last Name</Text>
-                <TextInput style={styles.input} value={profileForm.lastName} onChangeText={t => setProfileForm({ ...profileForm, lastName: t })} />
+                <Text style={[styles.editLabel, { color: isDark ? '#a1a1aa' : '#64748b' }]}>Last Name</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isDark ? '#18181b' : '#f8fafc',
+                      color: theme.text,
+                      borderColor: isDark ? '#27272a' : '#e2e8f0',
+                    },
+                    Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)
+                  ]}
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
+                  value={profileForm.lastName}
+                  onChangeText={t => setProfileForm({ ...profileForm, lastName: t })}
+                />
               </View>
               <View style={styles.formGroup}>
-                <Text style={styles.editLabel}>Phone</Text>
-                <TextInput style={styles.input} value={profileForm.phone} keyboardType="phone-pad" onChangeText={t => setProfileForm({ ...profileForm, phone: t })} />
+                <Text style={[styles.editLabel, { color: isDark ? '#a1a1aa' : '#64748b' }]}>Phone</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isDark ? '#18181b' : '#f8fafc',
+                      color: theme.text,
+                      borderColor: isDark ? '#27272a' : '#e2e8f0',
+                    },
+                    Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)
+                  ]}
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
+                  value={profileForm.phone}
+                  keyboardType="phone-pad"
+                  onChangeText={t => setProfileForm({ ...profileForm, phone: t })}
+                />
               </View>
               <View style={styles.formGroup}>
-                <Text style={styles.editLabel}>Email</Text>
-                <TextInput style={styles.input} value={profileForm.email} keyboardType="email-address" autoCapitalize="none" onChangeText={t => setProfileForm({ ...profileForm, email: t })} />
+                <Text style={[styles.editLabel, { color: isDark ? '#a1a1aa' : '#64748b' }]}>Email</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isDark ? '#18181b' : '#f8fafc',
+                      color: theme.text,
+                      borderColor: isDark ? '#27272a' : '#e2e8f0',
+                    },
+                    Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)
+                  ]}
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
+                  value={profileForm.email}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  onChangeText={t => setProfileForm({ ...profileForm, email: t })}
+                />
               </View>
 
               <View style={styles.profileTabs}>
-                <TouchableOpacity style={styles.profileTabItem} onPress={() => setIsSubscriptionVisible(true)}>
-                  <View style={styles.profileTabIcon}><Ionicons name="card-outline" size={20} color="#3b82f6" /></View>
-                  <Text style={styles.profileTabText}>Subscriptions</Text>
-                  <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
+                <TouchableOpacity style={[styles.profileTabItem, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setIsSubscriptionVisible(true)}>
+                  <View style={[styles.profileTabIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}><Ionicons name="card-outline" size={20} color="#3b82f6" /></View>
+                  <Text style={[styles.profileTabText, { color: theme.text }]}>Subscriptions</Text>
+                  <Ionicons name="chevron-forward" size={16} color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.profileTabItem, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setIsPrivacyVisible(true)}>
-                  <View style={[styles.profileTabIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}><Ionicons name="shield-checkmark-outline" size={20} color="#10b981" /></View>
-                  <Text style={[styles.profileTabText, { color: theme.text }]}>{t('profile.privacy')}</Text>
+                <TouchableOpacity style={[styles.profileTabItem, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setIsCurrencyPickerVisible(true)}>
+                  <View style={[styles.profileTabIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}><Ionicons name="cash-outline" size={20} color="#10b981" /></View>
+                  <Text style={[styles.profileTabText, { color: theme.text }]}>Currency</Text>
+                  <Text style={{ color: '#10b981', fontWeight: '700', marginRight: 8 }}>{currencySymbol} {selectedCurrency}</Text>
                   <Ionicons name="chevron-forward" size={16} color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.profileTabItem, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => Linking.openURL('https://expense.alpha-devs.cloud/privacy/')}>
+                  <View style={[styles.profileTabIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}><Ionicons name="shield-checkmark-outline" size={20} color="#3b82f6" /></View>
+                  <Text style={[styles.profileTabText, { color: theme.text }]}>{t('profile.privacy')}</Text>
+                  <Ionicons name="open-outline" size={16} color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} />
                 </TouchableOpacity>
 
                 <TouchableOpacity style={[styles.profileTabItem, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={toggleLanguage}>
@@ -796,6 +1031,24 @@ export default function HomeScreen() {
                 <TouchableOpacity onPress={() => setIsPrivacyVisible(false)}><Ionicons name="close" size={24} color={theme.text} /></TouchableOpacity>
               </View>
               <ScrollView contentContainerStyle={{ padding: 24 }}>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#3b82f6',
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    marginBottom: 20,
+                    gap: 8,
+                  }}
+                  onPress={() => Linking.openURL('https://expense.alpha-devs.cloud/privacy/')}
+                >
+                  <Ionicons name="globe-outline" size={18} color="#fff" />
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Open Full Privacy Policy Online</Text>
+                  <Ionicons name="open-outline" size={16} color="#fff" />
+                </TouchableOpacity>
                 <Text style={[styles.policyText, { color: theme.text }]}>{PRIVACY_POLICY}</Text>
               </ScrollView>
             </SafeAreaView>
@@ -807,9 +1060,27 @@ export default function HomeScreen() {
           <View style={styles.modalOverlay}>
             <View style={[styles.supportForm, { width: '90%', backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
               <Text style={[styles.modalTitle, { fontSize: 20, marginBottom: 10, color: theme.text }]}>Confirm Email Change</Text>
-              <Text style={{ color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)', marginBottom: 20 }}>Enter the verification code sent to {profileForm.email}</Text>
-              <TextInput style={[styles.input, { color: theme.text, letterSpacing: 8, textAlign: 'center', fontSize: 20 }]} value={otpCode} onChangeText={setOtpCode} keyboardType="numeric" maxLength={6} placeholder="000000" />
-              <TouchableOpacity style={[styles.saveBtn, { marginTop: 20, height: 50, borderRadius: 12 }]} onPress={verifyOtp}>
+              <Text style={{ color: theme.textDim, marginBottom: 20 }}>Enter the verification code sent to {profileForm.email}</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: isDark ? '#18181b' : '#f8fafc',
+                    color: theme.text,
+                    borderColor: isDark ? '#27272a' : '#e2e8f0',
+                    letterSpacing: 8,
+                    textAlign: 'center',
+                    fontSize: 20
+                  }
+                ]}
+                value={otpCode}
+                onChangeText={setOtpCode}
+                keyboardType="numeric"
+                maxLength={6}
+                placeholder="000000"
+                placeholderTextColor={theme.textDim}
+              />
+              <TouchableOpacity style={[styles.saveBtn, { marginTop: 20, height: 50, borderRadius: 12, backgroundColor: theme.button }]} onPress={verifyOtp}>
                 <Text style={styles.saveBtnText}>Verify OTP</Text>
               </TouchableOpacity>
               <TouchableOpacity style={{ marginTop: 15, alignItems: 'center' }} onPress={() => setIsOtpVisible(false)}><Text style={{ color: theme.textDim }}>Cancel</Text></TouchableOpacity>
@@ -829,41 +1100,61 @@ export default function HomeScreen() {
             <ScrollView contentContainerStyle={{ padding: 20 }}>
               <Text style={[styles.sectionTitle, { marginTop: 10, marginBottom: 20, color: theme.text }]}>{t('support.faq')}</Text>
               {faqItems.map((f, idx) => (
-                <TouchableOpacity key={idx} style={styles.faqItem} onPress={() => setExpandedFaq(expandedFaq === idx ? null : idx)}>
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.faqItem, { backgroundColor: theme.card, borderColor: theme.border }]}
+                  onPress={() => setExpandedFaq(expandedFaq === idx ? null : idx)}
+                >
                   <View style={styles.faqRow}>
                     <Text style={[styles.faqQuestion, { color: theme.text }]}>{f.q}</Text>
-                    <Ionicons name={expandedFaq === idx ? "chevron-up" : "chevron-down"} size={16} color={isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)"} />
+                    <Ionicons name={expandedFaq === idx ? "chevron-up" : "chevron-down"} size={16} color={theme.textDim} />
                   </View>
-                  {expandedFaq === idx && <Text style={[styles.faqAnswer, { color: isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.7)" }]}>{f.a}</Text>}
+                  {expandedFaq === idx && <Text style={[styles.faqAnswer, { color: theme.textDim }]}>{f.a}</Text>}
                 </TouchableOpacity>
               ))}
 
               <Text style={[styles.sectionTitle, { marginTop: 40, marginBottom: 20, color: theme.text }]}>{t('support.send')}</Text>
-              <View style={styles.supportForm}>
+              <View style={[styles.supportForm, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <View style={styles.supportFormHeader}>
                   <Ionicons name="chatbubble-ellipses-outline" size={18} color="#3b82f6" />
-                  <Text style={styles.supportFormTitle}>Send us a Message</Text>
+                  <Text style={[styles.supportFormTitle, { color: theme.text }]}>Send us a Message</Text>
                 </View>
 
                 <View style={styles.formGroup}>
-                  <Text style={[styles.editLabel, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>{t('support.subject')}</Text>
+                  <Text style={[styles.editLabel, { color: theme.textDim }]}>{t('support.subject')}</Text>
                   <TextInput
-                    style={[styles.supportInput, { backgroundColor: theme.card, borderColor: theme.border }]}
+                    style={[
+                      styles.supportInput,
+                      {
+                        backgroundColor: isDark ? '#18181b' : '#f8fafc',
+                        borderColor: isDark ? '#27272a' : '#e2e8f0',
+                        color: theme.text
+                      }
+                    ]}
                     value={supportForm.subject}
                     onChangeText={s => setSupportForm({ ...supportForm, subject: s })}
                     placeholder={t('support.subject')}
-                    placeholderTextColor="rgba(255,255,255,0.2)"
+                    placeholderTextColor={theme.textDim}
                   />
                 </View>
 
                 <View style={styles.formGroup}>
-                  <Text style={[styles.editLabel, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>{t('support.message')}</Text>
+                  <Text style={[styles.editLabel, { color: theme.textDim }]}>{t('support.message')}</Text>
                   <TextInput
-                    style={[styles.supportInput, { backgroundColor: theme.card, borderColor: theme.border, height: 120, textAlignVertical: 'top' }]}
+                    style={[
+                      styles.supportInput,
+                      {
+                        backgroundColor: isDark ? '#18181b' : '#f8fafc',
+                        borderColor: isDark ? '#27272a' : '#e2e8f0',
+                        color: theme.text,
+                        height: 120,
+                        textAlignVertical: 'top'
+                      }
+                    ]}
                     value={supportForm.message}
                     onChangeText={m => setSupportForm({ ...supportForm, message: m })}
                     placeholder={t('support.message')}
-                    placeholderTextColor="rgba(255,255,255,0.2)"
+                    placeholderTextColor={theme.textDim}
                     multiline
                   />
                 </View>
@@ -897,11 +1188,11 @@ export default function HomeScreen() {
             </View>
             <ScrollView contentContainerStyle={{ padding: 24 }}>
               <View style={styles.chartTitleContainer}>
-                <Text style={styles.visualCardTitle}>Monthly Spending Trend</Text>
-                <Text style={styles.chartSubtitle}>Last 6 Months</Text>
+                <Text style={[styles.visualCardTitle, { color: theme.text }]}>Monthly Spending Trend</Text>
+                <Text style={[styles.chartSubtitle, { color: theme.textDim }]}>Last 6 Months</Text>
               </View>
 
-              <View style={styles.chartWrapper}>
+              <View style={[styles.chartWrapper, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 {expenses.length > 0 ? (
                   <LineChart
                     areaChart
@@ -920,62 +1211,62 @@ export default function HomeScreen() {
                     noOfSections={4}
                     yAxisColor="transparent"
                     yAxisThickness={0}
-                    rulesColor="rgba(255, 255, 255, 0.05)"
+                    rulesColor={isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)"}
                     rulesType="solid"
-                    xAxisColor="rgba(255, 255, 255, 0.1)"
+                    xAxisColor={isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"}
                     pointerConfig={{
                       pointerStripHeight: 160,
-                      pointerStripColor: 'rgba(255, 255, 255, 0.2)',
+                      pointerStripColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
                       pointerStripWidth: 2,
                       pointerColor: '#8b5cf6',
                       radius: 6,
                       pointerLabelComponent: (items: any) => {
                         return (
-                          <View style={{ backgroundColor: '#18181b', padding: 8, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
-                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>${formatMoney(items[0].value, 0)}</Text>
+                          <View style={{ backgroundColor: isDark ? '#18181b' : '#ffffff', padding: 8, borderRadius: 8, borderWidth: 1, borderColor: theme.border }}>
+                            <Text style={{ color: theme.text, fontWeight: 'bold' }}>{currencySymbol}{formatMoney(items[0].value, 0)}</Text>
                           </View>
                         );
                       },
                     }}
-                    yAxisTextStyle={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}
-                    xAxisLabelTextStyle={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, textAlign: 'center' }}
-                    yAxisLabelPrefix="$"
+                    yAxisTextStyle={{ color: theme.textDim, fontSize: 10 }}
+                    xAxisLabelTextStyle={{ color: theme.textDim, fontSize: 10, textAlign: 'center' }}
+                    yAxisLabelPrefix={currencySymbol}
                     hideDataPoints
                     rulesLength={width - 120}
                   />
                 ) : (
-                  <View style={styles.emptyChart}><Text style={{ color: 'rgba(255,255,255,0.3)' }}>Insufficient data for trends</Text></View>
+                  <View style={styles.emptyChart}><Text style={{ color: theme.textDim }}>Insufficient data for trends</Text></View>
                 )}
               </View>
 
-              <View style={styles.visualCard}>
-                <Text style={styles.visualCardTitle}>Spending by Category</Text>
+              <View style={[styles.visualCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Text style={[styles.visualCardTitle, { color: theme.text }]}>Spending by Category</Text>
                 {getCategoryStats().length === 0 ? (
                   <View style={{ height: 100, justifyContent: 'center', alignItems: 'center' }}>
-                    <Text style={{ color: 'rgba(255,255,255,0.4)' }}>No data available for the period</Text>
+                    <Text style={{ color: theme.textDim }}>No data available for the period</Text>
                   </View>
                 ) : (
                   <>
                     <View style={styles.chartContainer}>
                       {getCategoryStats().slice(0, 5).map((stat, i) => (
                         <View key={i} style={styles.chartBarRow}>
-                          <Text style={styles.chartBarLabel}>{stat.name}</Text>
-                          <View style={styles.chartBarTrack}>
+                          <Text style={[styles.chartBarLabel, { color: theme.text }]}>{stat.name}</Text>
+                          <View style={[styles.chartBarTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderColor: theme.border }]}>
                             <View style={[styles.chartBarFill, { width: `${(stat.amount / getCategoryStats()[0].amount) * 100}%`, backgroundColor: stat.color }]} />
                           </View>
-                          <Text style={styles.chartBarValue}>${formatMoney(stat.amount, 0)}</Text>
+                          <Text style={[styles.chartBarValue, { color: theme.text }]}>{currencySymbol}{formatMoney(stat.amount, 0)}</Text>
                         </View>
                       ))}
                     </View>
 
                     <View style={styles.statsGrid}>
                       <View style={[styles.statsCard, { backgroundColor: 'rgba(139,92,246,0.1)' }]}>
-                        <Text style={styles.statsValue}>${formatMoney(getAdvancedStats().avg, 0)}</Text>
-                        <Text style={styles.statsLabel}>Avg. Daily</Text>
+                        <Text style={[styles.statsValue, { color: theme.text }]}>{currencySymbol}{formatMoney(getAdvancedStats().avg, 0)}</Text>
+                        <Text style={[styles.statsLabel, { color: theme.textDim }]}>Avg. Daily</Text>
                       </View>
                       <View style={[styles.statsCard, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                        <Text style={styles.statsValue} numberOfLines={1}>{getAdvancedStats().topCat}</Text>
-                        <Text style={styles.statsLabel}>Top Category</Text>
+                        <Text style={[styles.statsValue, { color: theme.text }]} numberOfLines={1}>{getAdvancedStats().topCat}</Text>
+                        <Text style={[styles.statsLabel, { color: theme.textDim }]}>Top Category</Text>
                       </View>
                     </View>
                   </>
@@ -990,22 +1281,22 @@ export default function HomeScreen() {
       <Modal visible={isReportsVisible} animationType="slide" transparent>
         <View style={styles.sheetOverlay}>
           <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setIsReportsVisible(false)} />
-          <View style={styles.sheetContainer}>
+          <View style={[styles.sheetContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
             <View style={styles.sheetHeader}>
-              <View style={styles.sheetDrag} />
+              <View style={[styles.sheetDrag, { backgroundColor: isDark ? '#27272a' : '#cbd5e1' }]} />
               <View style={styles.sheetTitleRow}>
-                <Text style={styles.sheetTitle}>{t('reports.title')}</Text>
-                <TouchableOpacity onPress={() => setIsReportsVisible(false)}><Ionicons name="close-circle" size={28} color="#71717a" /></TouchableOpacity>
+                <Text style={[styles.sheetTitle, { color: theme.text }]}>{t('reports.title')}</Text>
+                <TouchableOpacity onPress={() => setIsReportsVisible(false)}><Ionicons name="close-circle" size={28} color={theme.textDim} /></TouchableOpacity>
               </View>
             </View>
 
             <View style={styles.sheetFilterRow}>
-              <View style={styles.searchContainer}>
-                <Ionicons name="search" size={16} color="#71717a" style={{ marginRight: 8 }} />
+              <View style={[styles.searchContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Ionicons name="search" size={16} color={theme.textDim} style={{ marginRight: 8 }} />
                 <TextInput
-                  style={styles.searchInput}
+                  style={[styles.searchInput, { color: theme.text }]}
                   placeholder="Search store..."
-                  placeholderTextColor="#71717a"
+                  placeholderTextColor={theme.textDim}
                   value={reportStoreName}
                   onChangeText={setReportStoreName}
                 />
@@ -1013,18 +1304,18 @@ export default function HomeScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reportCatBar}>
                 <TouchableOpacity
                   onPress={() => setReportCategoryId(null)}
-                  style={[styles.miniCatBtn, !reportCategoryId && styles.miniCatActive]}
+                  style={[styles.miniCatBtn, { backgroundColor: theme.card, borderColor: theme.border }, !reportCategoryId && styles.miniCatActive]}
                 >
-                  <Text style={[styles.miniCatText, !reportCategoryId && { color: '#fff' }]}>All Categories</Text>
+                  <Text style={[styles.miniCatText, { color: theme.textDim }, !reportCategoryId && { color: '#fff' }]}>All Categories</Text>
                 </TouchableOpacity>
                 {categories.map(cat => (
                   <TouchableOpacity
                     key={cat.id}
                     onPress={() => setReportCategoryId(cat.id)}
-                    style={[styles.miniCatBtn, reportCategoryId === cat.id && styles.miniCatActive, reportCategoryId === cat.id && { backgroundColor: cat.color + '40' }]}
+                    style={[styles.miniCatBtn, { backgroundColor: theme.card, borderColor: theme.border }, reportCategoryId === cat.id && styles.miniCatActive, reportCategoryId === cat.id && { backgroundColor: cat.color + '40' }]}
                   >
                     <Ionicons name={cat.icon as any} size={12} color={cat.color} style={{ marginRight: 4 }} />
-                    <Text style={[styles.miniCatText, reportCategoryId === cat.id && { color: '#fff' }]}>{cat.name}</Text>
+                    <Text style={[styles.miniCatText, { color: theme.textDim }, reportCategoryId === cat.id && { color: '#fff' }]}>{cat.name}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -1032,42 +1323,42 @@ export default function HomeScreen() {
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.periodBar}>
               {PERIOD_KEYS.map(p => (
-                <TouchableOpacity key={p} onPress={() => setReportPeriod(p)} style={[styles.periodBtn, reportPeriod === p && styles.periodBtnActive]}>
-                  <Text style={[styles.periodBtnText, reportPeriod === p && styles.periodBtnTextActive]}>{t(`reports.periods.${p}`)}</Text>
+                <TouchableOpacity key={p} onPress={() => setReportPeriod(p)} style={[styles.periodBtn, { backgroundColor: theme.card, borderColor: theme.border }, reportPeriod === p && styles.periodBtnActive]}>
+                  <Text style={[styles.periodBtnText, { color: theme.textDim }, reportPeriod === p && styles.periodBtnTextActive]}>{t(`reports.periods.${p}`)}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
             {reportPeriod === 'custom' && (
-              <View style={styles.customRangeRow}>
-                <TextInput style={styles.customInput} placeholder="YYYY-MM-DD" placeholderTextColor="#71717a" value={customRange.from} onChangeText={t => setCustomRange({ ...customRange, from: t })} />
-                <Text style={{ color: '#fff' }}>to</Text>
-                <TextInput style={styles.customInput} placeholder="YYYY-MM-DD" placeholderTextColor="#71717a" value={customRange.to} onChangeText={t => setCustomRange({ ...customRange, to: t })} />
+              <View style={[styles.customRangeRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <TextInput style={[styles.customInput, { color: theme.text, borderBottomColor: theme.border }]} placeholder="YYYY-MM-DD" placeholderTextColor={theme.textDim} value={customRange.from} onChangeText={t => setCustomRange({ ...customRange, from: t })} />
+                <Text style={{ color: theme.text }}>to</Text>
+                <TextInput style={[styles.customInput, { color: theme.text, borderBottomColor: theme.border }]} placeholder="YYYY-MM-DD" placeholderTextColor={theme.textDim} value={customRange.to} onChangeText={t => setCustomRange({ ...customRange, to: t })} />
                 <TouchableOpacity onPress={loadReportData}><Ionicons name="search" size={24} color="#3b82f6" /></TouchableOpacity>
               </View>
             )}
 
             <View style={styles.reportStats}>
-              <View style={styles.reportStatItem}><Text style={[styles.reportStatVal, { color: theme.text }]}>$ {formatMoney(reportTotal)}</Text><Text style={styles.reportStatLab}>{t('reports.total_spend')}</Text></View>
-              <View style={styles.reportStatItem}><Text style={[styles.reportStatVal, { color: theme.text }]}>{reportExpenses.length}</Text><Text style={styles.reportStatLab}>{t('reports.receipts')}</Text></View>
+              <View style={[styles.reportStatItem, { backgroundColor: theme.card, borderColor: theme.border }]}><Text style={[styles.reportStatVal, { color: theme.text }]}>{currencySymbol} {formatMoney(reportTotal)}</Text><Text style={[styles.reportStatLab, { color: theme.textDim }]}>{t('reports.total_spend')}</Text></View>
+              <View style={[styles.reportStatItem, { backgroundColor: theme.card, borderColor: theme.border }]}><Text style={[styles.reportStatVal, { color: theme.text }]}>{reportExpenses.length}</Text><Text style={[styles.reportStatLab, { color: theme.textDim }]}>{t('reports.receipts')}</Text></View>
             </View>
 
-            <View style={styles.excelTable}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableHeadText, { flex: 1.2 }]}>DATE</Text>
-                <Text style={[styles.tableHeadText, { flex: 2.5 }]}>STORE</Text>
-                <Text style={[styles.tableHeadText, { flex: 1.3, textAlign: 'right' }]}>AMOUNT</Text>
+            <View style={[styles.excelTable, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={[styles.tableHeader, { backgroundColor: isDark ? '#18181b' : '#f1f5f9', borderBottomColor: theme.border }]}>
+                <Text style={[styles.tableHeadText, { color: theme.textDim, flex: 1.2 }]}>DATE</Text>
+                <Text style={[styles.tableHeadText, { color: theme.textDim, flex: 2.5 }]}>STORE</Text>
+                <Text style={[styles.tableHeadText, { color: theme.textDim, flex: 1.3, textAlign: 'right' }]}>AMOUNT</Text>
               </View>
               <ScrollView showsVerticalScrollIndicator={false}>
                 {isReportLoading ? <ActivityIndicator style={{ marginTop: 20 }} color="#3b82f6" /> :
                   reportExpenses.map((re, idx) => (
-                    <TouchableOpacity key={re.id} onPress={() => handlePressTransaction(re)} style={[styles.tableRow, idx % 2 === 0 && { backgroundColor: 'rgba(255,255,255,0.03)' }]}>
-                      <Text style={[styles.tableCell, { flex: 1.2, fontSize: 11 }]}>{re.date.split('-').slice(1).join('/')}</Text>
-                      <Text style={[styles.tableCell, { flex: 2.5, fontWeight: '600' }]} numberOfLines={1}>{re.store_name || 'N/A'}</Text>
-                      <Text style={[styles.tableCell, { flex: 1.3, textAlign: 'right', fontWeight: '800', color: '#fff' }]}>${formatMoney(re.amount)}</Text>
+                    <TouchableOpacity key={re.id} onPress={() => handlePressTransaction(re)} style={[styles.tableRow, { borderBottomColor: theme.border }, idx % 2 === 0 && { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }]}>
+                      <Text style={[styles.tableCell, { color: theme.textDim, flex: 1.2, fontSize: 11 }]}>{re.date.split('-').slice(1).join('/')}</Text>
+                      <Text style={[styles.tableCell, { color: theme.text, flex: 2.5, fontWeight: '600' }]} numberOfLines={1}>{re.store_name || 'N/A'}</Text>
+                      <Text style={[styles.tableCell, { flex: 1.3, textAlign: 'right', fontWeight: '800', color: theme.text }]}>{getCurrencySymbol(re.currency || selectedCurrency)}{formatMoney(re.amount)}</Text>
                     </TouchableOpacity>
                   ))}
-                {reportExpenses.length === 0 && !isReportLoading && <Text style={styles.noRepo}>No data for this period.</Text>}
+                {reportExpenses.length === 0 && !isReportLoading && <Text style={[styles.noRepo, { color: theme.textDim }]}>No data for this period.</Text>}
               </ScrollView>
             </View>
 
@@ -1091,53 +1382,83 @@ export default function HomeScreen() {
       <Modal visible={isDetailModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setIsDetailModalVisible(false)} />
-          <View style={styles.detailCard}>
+          <View style={[styles.detailCard, { backgroundColor: theme.background }]}>
             <View style={styles.detailTop}>
-              <Text style={[styles.detailTitle, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>{isEditing ? t('manual_add.title_edit') : t('manual_add.transaction_detail')}</Text>
+              <Text style={[styles.detailTitle, { color: theme.textDim }]}>{isEditing ? t('manual_add.title_edit') : t('manual_add.transaction_detail')}</Text>
               <View style={styles.detailAct}>
                 {!isEditing && (
                   <>
-                    <TouchableOpacity onPress={() => setIsEditing(true)}><Feather name="edit" size={20} color="#fff" /></TouchableOpacity>
+                    <TouchableOpacity onPress={() => setIsEditing(true)}><Feather name="edit" size={20} color={theme.text} /></TouchableOpacity>
                     <TouchableOpacity onPress={() => Alert.alert('Delete', 'Confirm?', [{ text: 'No' }, { text: 'Yes', style: 'destructive', onPress: performDelete }])}><Ionicons name="trash-outline" size={22} color="#ff4b4b" /></TouchableOpacity>
                   </>
                 )}
-                <TouchableOpacity onPress={() => setIsDetailModalVisible(false)}><Ionicons name="close" size={24} color="#fff" /></TouchableOpacity>
+                <TouchableOpacity onPress={() => setIsDetailModalVisible(false)}><Ionicons name="close" size={24} color={theme.text} /></TouchableOpacity>
               </View>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               {isEditing ? (
                 <View style={styles.editForm}>
-                  <Text style={[styles.editLabel, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>{t('manual_add.store')}</Text>
-                  <TextInput style={[styles.input, { backgroundColor: theme.card, borderColor: theme.border }]} value={editedData.storeName} onChangeText={t => setEditedData({ ...editedData, storeName: t })} placeholder={t('manual_add.store')} />
+                  <Text style={[styles.editLabel, { color: theme.textDim }]}>{t('manual_add.store')}</Text>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: isDark ? '#18181b' : '#f8fafc', borderColor: theme.border, color: theme.text }]}
+                    value={editedData.storeName}
+                    onChangeText={t => setEditedData({ ...editedData, storeName: t })}
+                    placeholder={t('manual_add.store')}
+                    placeholderTextColor={theme.textDim}
+                  />
 
                   <View style={styles.rowInputs}>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.editLabel, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>{t('manual_add.amount')}</Text>
-                      <TextInput style={[styles.input, { backgroundColor: theme.card, borderColor: theme.border }]} value={editedData.amount} keyboardType="numeric" onChangeText={t => setEditedData({ ...editedData, amount: t })} placeholder={t('manual_add.amount')} />
+                      <Text style={[styles.editLabel, { color: theme.textDim }]}>{t('manual_add.amount')}</Text>
+                      <TextInput
+                        style={[styles.input, { backgroundColor: isDark ? '#18181b' : '#f8fafc', borderColor: theme.border, color: theme.text }]}
+                        value={editedData.amount}
+                        keyboardType="numeric"
+                        onChangeText={t => setEditedData({ ...editedData, amount: t })}
+                        placeholder={t('manual_add.amount')}
+                        placeholderTextColor={theme.textDim}
+                      />
                     </View>
                     <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text style={[styles.editLabel, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>{t('manual_add.tax')}</Text>
-                      <TextInput style={[styles.input, { backgroundColor: theme.card, borderColor: theme.border }]} value={editedData.tax} keyboardType="numeric" onChangeText={t => setEditedData({ ...editedData, tax: t })} placeholder={t('manual_add.tax')} />
+                      <Text style={[styles.editLabel, { color: theme.textDim }]}>{t('manual_add.tax')}</Text>
+                      <TextInput
+                        style={[styles.input, { backgroundColor: isDark ? '#18181b' : '#f8fafc', borderColor: theme.border, color: theme.text }]}
+                        value={editedData.tax}
+                        keyboardType="numeric"
+                        onChangeText={t => setEditedData({ ...editedData, tax: t })}
+                        placeholder={t('manual_add.tax')}
+                        placeholderTextColor={theme.textDim}
+                      />
                     </View>
                   </View>
 
                   <View style={{ marginTop: 10 }}>
-                    <Text style={[styles.editLabel, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>{t('manual_add.date')} (YYYY-MM-DD)</Text>
-                    <TextInput style={[styles.input, { backgroundColor: theme.card, borderColor: theme.border }]} value={editedData.date} onChangeText={t => setEditedData({ ...editedData, date: t })} placeholder={t('manual_add.date')} />
+                    <Text style={[styles.editLabel, { color: theme.textDim }]}>{t('manual_add.date')} (YYYY-MM-DD)</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: isDark ? '#18181b' : '#f8fafc', borderColor: theme.border, color: theme.text }]}
+                      value={editedData.date}
+                      onChangeText={t => setEditedData({ ...editedData, date: t })}
+                      placeholder={t('manual_add.date')}
+                      placeholderTextColor={theme.textDim}
+                    />
                   </View>
 
-                  <Text style={[styles.editLabel, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>{t('manual_add.category')}</Text>
+                  <Text style={[styles.editLabel, { color: theme.textDim }]}>{t('manual_add.category')}</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 15 }}>
                     {categories.map(c => (
-                      <TouchableOpacity key={c.id} onPress={() => setEditedData({ ...editedData, categoryId: c.id })} style={[styles.miniCatBtn, editedData.categoryId === c.id && styles.miniCatActive]}>
+                      <TouchableOpacity
+                        key={c.id}
+                        onPress={() => setEditedData({ ...editedData, categoryId: c.id })}
+                        style={[styles.miniCatBtn, { backgroundColor: theme.card, borderColor: theme.border }, editedData.categoryId === c.id && styles.miniCatActive]}
+                      >
                         <Ionicons name={c.icon as any} size={14} color={c.color} style={{ marginRight: 8 }} />
-                        <Text style={[styles.miniCatText, editedData.categoryId === c.id && { color: '#fff' }]}>{c.name}</Text>
+                        <Text style={[styles.miniCatText, { color: theme.textDim }, editedData.categoryId === c.id && { color: '#fff' }]}>{c.name}</Text>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
 
                   <View style={styles.itemsHeader}>
-                    <Text style={[styles.editLabel, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>{t('manual_add.items')}</Text>
+                    <Text style={[styles.editLabel, { color: theme.textDim }]}>{t('manual_add.items')}</Text>
                     <TouchableOpacity style={styles.addItemBtn} onPress={() => setEditedData({ ...editedData, items: [...editedData.items, { name: '', quantity: 1, price: 0 }] })}>
                       <Ionicons name="add-circle" size={18} color={theme.button} /><Text style={[styles.addItemText, { color: theme.button }]}>{t('manual_add.add_item')}</Text>
                     </TouchableOpacity>
@@ -1145,15 +1466,35 @@ export default function HomeScreen() {
 
                   {editedData.items.map((item: any, idx: number) => (
                     <View key={idx} style={styles.itemEditRow}>
-                      <TextInput style={[styles.input, { flex: 2, marginRight: 5, backgroundColor: theme.card, borderColor: theme.border }]} value={item.name} onChangeText={t => {
-                        const newItems = [...editedData.items]; newItems[idx].name = t; setEditedData({ ...editedData, items: newItems });
-                      }} placeholder={t('manual_add.item_name')} />
-                      <TextInput style={[styles.input, { flex: 0.6, marginRight: 5, backgroundColor: theme.card, borderColor: theme.border }]} value={item.quantity.toString()} keyboardType="numeric" onChangeText={t => {
-                        const newItems = [...editedData.items]; newItems[idx].quantity = parseInt(t) || 0; setEditedData({ ...editedData, items: newItems });
-                      }} placeholder={t('manual_add.qty')} />
-                      <TextInput style={[styles.input, { flex: 1, backgroundColor: theme.card, borderColor: theme.border }]} value={item.price.toString()} keyboardType="numeric" onChangeText={t => {
-                        const newItems = [...editedData.items]; newItems[idx].price = parseFloat(t) || 0; setEditedData({ ...editedData, items: newItems });
-                      }} placeholder={t('manual_add.price')} />
+                      <TextInput
+                        style={[styles.input, { flex: 2, marginRight: 5, backgroundColor: isDark ? '#18181b' : '#f8fafc', borderColor: theme.border, color: theme.text }]}
+                        value={item.name}
+                        onChangeText={t => {
+                          const newItems = [...editedData.items]; newItems[idx].name = t; setEditedData({ ...editedData, items: newItems });
+                        }}
+                        placeholder={t('manual_add.item_name')}
+                        placeholderTextColor={theme.textDim}
+                      />
+                      <TextInput
+                        style={[styles.input, { flex: 0.6, marginRight: 5, backgroundColor: isDark ? '#18181b' : '#f8fafc', borderColor: theme.border, color: theme.text }]}
+                        value={item.quantity.toString()}
+                        keyboardType="numeric"
+                        onChangeText={t => {
+                          const newItems = [...editedData.items]; newItems[idx].quantity = parseInt(t) || 0; setEditedData({ ...editedData, items: newItems });
+                        }}
+                        placeholder={t('manual_add.qty')}
+                        placeholderTextColor={theme.textDim}
+                      />
+                      <TextInput
+                        style={[styles.input, { flex: 1, backgroundColor: isDark ? '#18181b' : '#f8fafc', borderColor: theme.border, color: theme.text }]}
+                        value={item.price.toString()}
+                        keyboardType="numeric"
+                        onChangeText={t => {
+                          const newItems = [...editedData.items]; newItems[idx].price = parseFloat(t) || 0; setEditedData({ ...editedData, items: newItems });
+                        }}
+                        placeholder={t('manual_add.price')}
+                        placeholderTextColor={theme.textDim}
+                      />
                       <TouchableOpacity onPress={() => {
                         const newItems = editedData.items.filter((_: any, i: number) => i !== idx); setEditedData({ ...editedData, items: newItems });
                       }} style={{ marginLeft: 8 }}><Ionicons name="trash" size={20} color="#ff4b4b" /></TouchableOpacity>
@@ -1162,19 +1503,19 @@ export default function HomeScreen() {
 
                   <View style={styles.editBtns}>
                     <TouchableOpacity style={[styles.btn, styles.saveBtn, { backgroundColor: theme.button }]} onPress={performUpdate}><Text style={styles.btnText}>{t('profile.save_changes')}</Text></TouchableOpacity>
-                    <TouchableOpacity style={[styles.btn, styles.canBtn, { backgroundColor: theme.card }]} onPress={() => setIsEditing(false)}><Text style={[styles.btnText, { color: theme.text }]}>{t('common.cancel')}</Text></TouchableOpacity>
+                    <TouchableOpacity style={[styles.btn, styles.canBtn, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]} onPress={() => setIsEditing(false)}><Text style={[styles.btnText, { color: theme.text }]}>{t('common.cancel')}</Text></TouchableOpacity>
                   </View>
                 </View>
               ) : (
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={styles.bigAmt}>${formatMoney(selectedExpense?.amount)}</Text>
-                  <Text style={styles.bigStore}>{selectedExpense?.store_name}</Text>
+                  <Text style={[styles.bigAmt, { color: theme.text }]}>{getCurrencySymbol(selectedExpense?.currency || selectedCurrency)}{formatMoney(selectedExpense?.amount)}</Text>
+                  <Text style={[styles.bigStore, { color: theme.textDim }]}>{selectedExpense?.store_name}</Text>
                   <View style={styles.badgeRow}>
                     <View style={[styles.catBadge, { backgroundColor: (selectedExpense?.categories?.color || '#3b82f6') + '20' }]}>
                       <Ionicons name={(selectedExpense?.categories?.icon || 'card') as any} size={14} color={selectedExpense?.categories?.color || '#3b82f6'} />
                       <Text style={[styles.catBadgeText, { color: selectedExpense?.categories?.color || '#3b82f6' }]}>{selectedExpense?.categories?.name || 'Uncategorized'}</Text>
                     </View>
-                    <Text style={styles.detailDateText}>{selectedExpense?.date ? new Date(selectedExpense.date).toLocaleDateString(undefined, { dateStyle: 'long' }) : ''}</Text>
+                    <Text style={[styles.detailDateText, { color: theme.textDim }]}>{selectedExpense?.date ? new Date(selectedExpense.date).toLocaleDateString(undefined, { dateStyle: 'long' }) : ''}</Text>
                   </View>
                   {!showItems ? (
                     <TouchableOpacity style={[styles.viewDetailsBtn, { backgroundColor: theme.button + '20' }]} onPress={() => setShowItems(true)}>
@@ -1188,7 +1529,7 @@ export default function HomeScreen() {
                         <Ionicons name="chevron-up" size={16} color={theme.button} />
                       </TouchableOpacity>
                       {selectedExpense?.expense_items?.length > 0 && (
-                        <View style={styles.itemsList}>
+                        <View style={[styles.itemsList, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
                           {(() => {
                             const grouped: any = {};
                             selectedExpense.expense_items.forEach((i: any) => {
@@ -1199,15 +1540,15 @@ export default function HomeScreen() {
                             });
                             return Object.values(grouped).map((item: any) => (
                               <View key={item.id} style={styles.itemRow}>
-                                <Text style={styles.itemName}>{item.name} x{item.quantity}</Text>
-                                <Text style={styles.itemPrice}>${formatMoney(toAmount(item.price) * toAmount(item.quantity))}</Text>
+                                <Text style={[styles.itemName, { color: theme.textDim }]}>{item.name} x{item.quantity}</Text>
+                                <Text style={[styles.itemPrice, { color: theme.text }]}>{getCurrencySymbol(selectedExpense?.currency || selectedCurrency)}{formatMoney(toAmount(item.price) * toAmount(item.quantity))}</Text>
                               </View>
                             ));
                           })()}
                           {selectedExpense?.tax > 0 && (
-                            <View style={[styles.itemRow, { borderTopWidth: 1, borderTopColor: '#27272a', marginTop: 8, paddingTop: 8 }]}>
-                              <Text style={[styles.itemName, { fontWeight: '700' }]}>TAX</Text>
-                              <Text style={[styles.itemPrice, { fontWeight: '700' }]}>${formatMoney(selectedExpense.tax)}</Text>
+                            <View style={[styles.itemRow, { borderTopWidth: 1, borderTopColor: theme.border, marginTop: 8, paddingTop: 8 }]}>
+                              <Text style={[styles.itemName, { fontWeight: '700', color: theme.text }]}>TAX</Text>
+                              <Text style={[styles.itemPrice, { fontWeight: '700', color: theme.text }]}>{getCurrencySymbol(selectedExpense?.currency || selectedCurrency)}{formatMoney(selectedExpense.tax)}</Text>
                             </View>
                           )}
                         </View>
@@ -1215,7 +1556,7 @@ export default function HomeScreen() {
                     </View>
                   )}
                   {selectedExpense?.receipt_image_key && (
-                    <View style={styles.receiptPrev}>
+                    <View style={[styles.receiptPrev, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
                       {receiptUrl ? <Image source={{ uri: receiptUrl }} style={styles.receiptImg} resizeMode="contain" /> : <ActivityIndicator color="#3b82f6" />}
                     </View>
                   )}
@@ -1259,7 +1600,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => safelySwitchModal(setIsProfileVisible)}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowSettings(false); openProfile(); }}>
               <Ionicons name="person-outline" size={20} color={theme.text} />
               <Text style={[styles.menuText, { color: theme.text }]}>Profile</Text>
             </TouchableOpacity>
@@ -1274,14 +1615,23 @@ export default function HomeScreen() {
               <Text style={[styles.menuText, { color: theme.text }]}>{i18n.language === 'en' ? 'Switch to Chinese' : '切換為英文'}</Text>
             </TouchableOpacity>
 
+            <TouchableOpacity style={styles.menuItem} onPress={() => safelySwitchModal(setIsCurrencyPickerVisible)}>
+              <Ionicons name="cash-outline" size={20} color="#10b981" />
+              <Text style={[styles.menuText, { color: theme.text }]}>Currency ({selectedCurrency})</Text>
+              <Text style={{ marginLeft: 'auto', color: '#10b981', fontWeight: '700', fontSize: 13, marginRight: 4 }}>
+                {currencySymbol}
+              </Text>
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.menuItem} onPress={() => safelySwitchModal(setIsSupportVisible)}>
               <Ionicons name="headset-outline" size={20} color={theme.text} />
               <Text style={[styles.menuText, { color: theme.text }]}>Customer Support</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => safelySwitchModal(setIsPrivacyVisible)}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowSettings(false); Linking.openURL('https://expense.alpha-devs.cloud/privacy/'); }}>
               <Ionicons name="shield-checkmark-outline" size={20} color={theme.text} />
               <Text style={[styles.menuText, { color: theme.text }]}>Privacy & Terms</Text>
+              <Ionicons name="open-outline" size={16} color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} style={{ marginLeft: 'auto' }} />
             </TouchableOpacity>
 
             <View style={{ height: 1.5, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', marginVertical: 5 }} />
@@ -1290,6 +1640,73 @@ export default function HomeScreen() {
               <Ionicons name="log-out-outline" size={20} color="#ff4b4b" />
               <Text style={styles.menuText}>Logout</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Currency Picker Modal */}
+      <Modal visible={isCurrencyPickerVisible} transparent animationType="slide">
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }]}>
+          <View style={[styles.currencySheet, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <SafeAreaView style={{ flex: 1 }}>
+              <View style={styles.currencyHeader}>
+                <Text style={[styles.currencyTitle, { color: theme.text }]}>Select Currency</Text>
+                <TouchableOpacity onPress={() => { setIsCurrencyPickerVisible(false); setCurrencySearchQuery(''); }}>
+                  <Ionicons name="close" size={24} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.currencySearchBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Ionicons name="search" size={18} color={theme.textDim} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={[styles.currencySearchInput, { color: theme.text }]}
+                  placeholder="Search currency code or name..."
+                  placeholderTextColor={theme.textDim}
+                  value={currencySearchQuery}
+                  onChangeText={setCurrencySearchQuery}
+                  autoCapitalize="none"
+                  clearButtonMode="while-editing"
+                />
+              </View>
+
+              <ScrollView style={{ flex: 1, marginTop: 12 }} keyboardShouldPersistTaps="handled">
+                {currenciesList
+                  .filter(c => {
+                    if (!currencySearchQuery.trim()) return true;
+                    const q = currencySearchQuery.toLowerCase();
+                    return c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q);
+                  })
+                  .map(c => {
+                    const isSelected = c.code === selectedCurrency;
+                    return (
+                      <TouchableOpacity
+                        key={c.code}
+                        style={[
+                          styles.currencyRow,
+                          {
+                            backgroundColor: isSelected ? (isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.1)') : theme.card,
+                            borderColor: isSelected ? '#10b981' : theme.border,
+                          },
+                        ]}
+                        onPress={() => handleSelectCurrency(c)}
+                      >
+                        <View style={[styles.currencySymbolBadge, { backgroundColor: isSelected ? '#10b981' : (isDark ? '#27272a' : '#e4e4e7') }]}>
+                          <Text style={{ color: isSelected ? '#fff' : theme.text, fontWeight: '700', fontSize: 15 }}>
+                            {c.symbol}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={{ color: theme.text, fontWeight: '700', fontSize: 16 }}>{c.code}</Text>
+                          <Text style={{ color: theme.textDim, fontSize: 13, marginTop: 2 }}>{c.name}</Text>
+                        </View>
+                        {isSelected && (
+                          <Ionicons name="checkmark-circle" size={22} color="#10b981" />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+              </ScrollView>
+            </SafeAreaView>
           </View>
         </View>
       </Modal>
@@ -1780,5 +2197,51 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#8b5cf6',
+  },
+  currencySheet: {
+    height: height * 0.75,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  currencyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  currencyTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  currencySearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  currencySearchInput: {
+    flex: 1,
+    fontSize: 15,
+  },
+  currencyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  currencySymbolBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

@@ -261,11 +261,11 @@ export default function PaywallScreen({ onClose, isForced = false }: PaywallScre
             </TouchableOpacity>
             
             <View style={styles.legalLinksRow}>
-              <TouchableOpacity onPress={() => Linking.openURL('https://alpha-devs.cloud/privacy/').catch(() => Alert.alert('Privacy Policy', 'Visit https://alpha-devs.cloud/privacy/'))}>
+              <TouchableOpacity onPress={() => Linking.openURL('https://expense.alpha-devs.cloud/privacy/').catch(() => Alert.alert('Privacy Policy', 'Visit https://expense.alpha-devs.cloud/privacy/'))}>
                 <Text style={[styles.legalLinkText, { color: '#8b5cf6' }]}>Privacy Policy</Text>
               </TouchableOpacity>
               <Text style={[styles.legalDivider, { color: theme.textDim }]}>•</Text>
-              <TouchableOpacity onPress={() => Linking.openURL('https://alpha-devs.cloud/terms/').catch(() => Alert.alert('Terms of Use', 'Visit https://alpha-devs.cloud/terms/'))}>
+              <TouchableOpacity onPress={() => Linking.openURL('https://expense.alpha-devs.cloud/terms/').catch(() => Alert.alert('Terms of Use', 'Visit https://expense.alpha-devs.cloud/terms/'))}>
                 <Text style={[styles.legalLinkText, { color: '#8b5cf6' }]}>Terms of Use (EULA)</Text>
               </TouchableOpacity>
             </View>

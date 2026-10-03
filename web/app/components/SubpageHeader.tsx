@@ -3,8 +3,8 @@ import Link from 'next/link';
 
 export function SubpageHeader() {
   return (
-    <header className="header">
-      <div className="container header-inner">
+    <header className="nav-bar">
+      <div className="container nav-inner">
         <Link href="/" className="logo">
           <span className="logo-icon">
             <Image src="/logo.png" alt="Expense Manager Logo" width={32} height={32} />
@@ -12,14 +12,14 @@ export function SubpageHeader() {
           <span>Expense Manager</span>
         </Link>
 
-        <nav className="nav-desktop" aria-label="Main Navigation">
+        <nav className="nav-links" aria-label="Main Navigation">
           <Link href="/">Home</Link>
           <Link href="/privacy/">Privacy Policy</Link>
           <Link href="/terms/">Terms of Use</Link>
           <Link href="/support/">Support</Link>
         </nav>
 
-        <div className="header-actions">
+        <div className="nav-actions">
           <Link href="/" className="btn btn-purple btn-sm">
             Back to Home
           </Link>
@@ -31,8 +31,8 @@ export function SubpageHeader() {
 
 export function SubpageFooter() {
   return (
-    <footer className="footer" style={{ marginTop: '80px' }}>
-      <div className="container footer-inner">
+    <footer className="footer" style={{ marginTop: 'auto', borderTop: '1px solid var(--border)', background: '#fff', padding: '40px 0' }}>
+      <div className="container footer-inner" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
         <div className="footer-brand">
           <div className="logo">
             <span className="logo-icon">
@@ -40,7 +40,7 @@ export function SubpageFooter() {
             </span>
             <span>Expense Manager</span>
           </div>
-          <p className="footer-copy">© {new Date().getFullYear()} Expense Manager. All rights reserved.</p>
+          <p className="footer-copy" style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '6px' }}>© {new Date().getFullYear()} Expense Manager. All rights reserved.</p>
         </div>
 
         <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '0.9rem', color: 'var(--text-muted)' }}>

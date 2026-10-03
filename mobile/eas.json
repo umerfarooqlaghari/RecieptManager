@@ -24,13 +24,26 @@
         "simulator": false
       },
       "env": {
-        "EXPO_USE_PRECOMPILED_MODULES": "0"
+        "EXPO_USE_PRECOMPILED_MODULES": "0",
+        "EXPO_PUBLIC_BACKEND_URL": "https://recieptmanager.onrender.com",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ppqkaqsrjgnjoesinjsz.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwcWthcXNyamduam9lc2luanN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxOTY4NzgsImV4cCI6MjA4OTc3Mjg3OH0.CA3--tdRVzV0wGTJvbmjhoLsrpCvtDp8YljYaEo8yWw",
+        "EXPO_PUBLIC_RC_IOS_KEY": "appl_VGZryqOlPRcNoqaqnBOHWYqZbFZ",
+        "EXPO_PUBLIC_RC_ANDROID_KEY": "goog_dummy_revenuecat_android_key_replace_with_actual",
+        "EXPO_PUBLIC_RC_TEST_STORE_KEY": "test_eCTUmpCpdbRKrkZmYUPpFeRedVw",
+        "EXPO_PUBLIC_RC_ENTITLEMENT_ID": "Expense Tracker Premium"
       }
     }
   },
   "submit": {
     "production": {
-      "ios": {}
+      "ios": {
+        "ascApiKeyPath": "./AuthKey_VTVNRS996B.p8",
+        "ascApiKeyIssuerId": "138bd8ae-ea40-4c7b-a543-2964deb4a55b",
+        "ascApiKeyId": "VTVNRS996B",
+        "appleTeamId": "2WQ7LU7T5X",
+        "ascAppId": "6762551645"
+      }
     }
   }
 }

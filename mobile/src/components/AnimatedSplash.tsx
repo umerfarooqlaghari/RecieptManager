@@ -27,26 +27,26 @@ export default function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
   useEffect(() => {
     // 1. Logo Entry: Scale and Fade in
     logoScale.value = withTiming(1, { 
-      duration: 1200,
+      duration: 600,
       easing: Easing.bezier(0.25, 0.1, 0.25, 1)
     });
-    logoOpacity.value = withTiming(1, { duration: 1000 });
+    logoOpacity.value = withTiming(1, { duration: 500 });
 
     // 2. Logo Exit: Zoom in slightly and fade out entire screen
     const triggerExit = () => {
-       containerOpacity.value = withTiming(0, { duration: 800 }, (finished) => {
+       containerOpacity.value = withTiming(0, { duration: 400 }, (finished) => {
          if (finished) {
            runOnJS(onFinish)();
          }
        });
-       logoScale.value = withTiming(1.5, { 
-         duration: 800, 
+       logoScale.value = withTiming(1.3, { 
+         duration: 400, 
          easing: Easing.in(Easing.exp) 
        });
     };
 
-    // Keep it visible for 2.5 seconds total before starting exit
-    const exitTimer = setTimeout(triggerExit, 2500);
+    // Visible for 700ms then start smooth exit transition
+    const exitTimer = setTimeout(triggerExit, 700);
     
     return () => clearTimeout(exitTimer);
   }, [logoScale, logoOpacity, containerOpacity, onFinish]);

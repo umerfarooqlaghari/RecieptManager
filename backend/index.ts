@@ -8,6 +8,7 @@ import * as awsService from './services/awsService';
 import * as geminiService from './services/geminiService';
 import * as expenseService from './services/expenseService';
 import * as otpService from './services/otpService';
+import * as currencyService from './services/currencyService';
 import { getSupabaseClient } from './lib/supabase';
 
 dotenv.config();
@@ -125,26 +126,38 @@ app.post('/api/auth/verify-otp', otpLimiter, async (req: Request, res: Response)
   }
 });
 
+// ─── Currencies Endpoint ──────────────────────────────────────────────────────
+app.get('/api/currencies', async (req: Request, res: Response) => {
+  try {
+    const currencies = await currencyService.getSupportedCurrencies();
+    res.json({ success: true, currencies });
+  } catch (error: any) {
+    console.error('Failed to get currencies:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ─── Receipt Scan ─────────────────────────────────────────────────────────────
 app.post('/api/scan-receipt', requireAuth, requirePremium, scanLimiter, async (req: Request, res: Response) => {
   try {
-    const { imageBase64, mimeType } = req.body;
+    const { imageBase64, mimeType, targetCurrency } = req.body;
     const user = (req as any).user;
     const userId: string = user.id;
     const userEmail: string = user.email;
     const accessToken = req.headers.authorization?.split(' ')[1] || '';
 
-    console.log(`[Scan] Processing for user: ${userId} (${userEmail})`);
+    console.log(`[Scan] Processing for user: ${userId} (${userEmail}), targetCurrency: ${targetCurrency || 'USD'}`);
 
     if (!imageBase64) {
       return res.status(400).json({ error: 'imageBase64 is required' });
     }
 
-    // 1. Analyze with Gemini
+    // 1. Analyze with Gemini and convert to targetCurrency using open rates
     console.log('Analyzing receipt with Gemini...');
     const scanResult = await geminiService.analyzeReceipt(
       Buffer.from(imageBase64, 'base64'),
-      mimeType || 'image/jpeg'
+      mimeType || 'image/jpeg',
+      targetCurrency || 'USD'
     );
 
     // 2. Upload to S3
@@ -164,7 +177,7 @@ app.post('/api/scan-receipt', requireAuth, requirePremium, scanLimiter, async (r
     const expense = await expenseService.createExpense(accessToken, {
       userId,
       amount: scanResult.totalAmount,
-      currency: scanResult.currency || 'USD',
+      currency: scanResult.currency || targetCurrency || 'USD',
       date: scanResult.date,
       storeName: scanResult.storeName,
       categoryId,
