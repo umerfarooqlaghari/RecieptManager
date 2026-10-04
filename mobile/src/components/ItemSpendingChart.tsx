@@ -17,6 +17,7 @@ import Svg, {
   G,
 } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { toAmount, formatMoney } from '../utils/money';
 import { convertCurrencyLocally } from '../services/currencyService';
 
@@ -96,6 +97,7 @@ export default function ItemSpendingChart({
   theme,
   defaultMode = 'monthly',
 }: ItemSpendingChartProps) {
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<'monthly' | 'daily'>(defaultMode);
   const [selectedItemFilter, setSelectedItemFilter] = useState<string | null>(null);
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
@@ -333,9 +335,14 @@ export default function ItemSpendingChart({
       {/* Header with Title and Mode Switcher */}
       <View style={styles.headerRow}>
         <View>
-          <Text style={[styles.title, { color: theme.text }]}>Item Spending Trends</Text>
+          <Text style={[styles.title, { color: theme.text }]}>{t('chart.title')}</Text>
           <Text style={[styles.subtitle, { color: theme.textDim }]}>
-            {viewMode === 'monthly' ? `Monthly breakdown • ${activeYear}` : `Daily breakdown • ${MONTH_LABELS[activeDailyMonth - 1]} ${activeYear}`}
+            {viewMode === 'monthly'
+              ? t('chart.monthly_breakdown', { year: activeYear })
+              : t('chart.daily_breakdown', {
+                  month: t(`months.${MONTH_LABELS[activeDailyMonth - 1]?.toLowerCase()}`),
+                  year: activeYear,
+                })}
           </Text>
         </View>
 
@@ -349,7 +356,7 @@ export default function ItemSpendingChart({
             }}
           >
             <Text style={[styles.toggleBtnText, { color: isDark ? '#a1a1aa' : '#64748b' }, viewMode === 'monthly' && { color: isDark ? '#09090b' : '#ffffff', fontWeight: '700' }]}>
-              Monthly
+              {t('chart.monthly')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -360,7 +367,7 @@ export default function ItemSpendingChart({
             }}
           >
             <Text style={[styles.toggleBtnText, { color: isDark ? '#a1a1aa' : '#64748b' }, viewMode === 'daily' && { color: isDark ? '#09090b' : '#ffffff', fontWeight: '700' }]}>
-              Daily
+              {t('chart.daily')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -414,7 +421,7 @@ export default function ItemSpendingChart({
                     ]}
                   >
                     <Text style={[styles.filterChipText, { color: isSelected ? '#fff' : hasData ? theme.text : theme.textDim, fontWeight: hasData ? '700' : '400' }]}>
-                      {mName}
+                      {t(`months.${mName.toLowerCase()}`)}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -466,7 +473,7 @@ export default function ItemSpendingChart({
         <View style={styles.emptyBox}>
           <Ionicons name="bar-chart-outline" size={32} color={theme.textDim} />
           <Text style={[styles.emptyText, { color: theme.textDim }]}>
-            Scan receipts to see item trends
+            {t('chart.empty')}
           </Text>
         </View>
       ) : (

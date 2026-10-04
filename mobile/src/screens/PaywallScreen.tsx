@@ -87,11 +87,11 @@ export default function PaywallScreen({ onClose, isForced = false }: PaywallScre
   };
 
   const features = [
-    { icon: 'camera', text: 'AI Receipt Scanning', sub: 'Instant extraction from any photo' },
-    { icon: 'bar-chart', text: 'Advanced Analytics', sub: 'Detailed trends and insights' },
-    { icon: 'cloud-upload', text: 'Unlimited Cloud Storage', sub: 'Your receipts, safe forever' },
-    { icon: 'document-text', text: 'Excel Exports', sub: 'Download filtered expense reports' },
-    { icon: 'notifications', text: 'Smart Notifications', sub: 'Get notified when scans complete' },
+    { icon: 'camera', text: t('premium.f_scan'), sub: t('premium.f_scan_sub') },
+    { icon: 'bar-chart', text: t('premium.f_analytics'), sub: t('premium.f_analytics_sub') },
+    { icon: 'cloud-upload', text: t('premium.f_storage'), sub: t('premium.f_storage_sub') },
+    { icon: 'document-text', text: t('premium.f_export'), sub: t('premium.f_export_sub') },
+    { icon: 'notifications', text: t('premium.f_notify'), sub: t('premium.f_notify_sub') },
   ];
 
   const getPackagePrice = (type: string) => {
@@ -151,7 +151,7 @@ export default function PaywallScreen({ onClose, isForced = false }: PaywallScre
             </LinearGradient>
             <Text style={[styles.title, { color: theme.text }]}>{t('premium.upgrade')}</Text>
             <Text style={[styles.subtitle, { color: theme.textDim }]}>
-              Master your finances with the ultimate expense tracking tools.
+              {t('premium.subtitle')}
             </Text>
           </View>
 
@@ -175,19 +175,16 @@ export default function PaywallScreen({ onClose, isForced = false }: PaywallScre
             <View style={{ alignItems: 'center', marginTop: 30, padding: 20 }}>
               <Ionicons name="construct-outline" size={48} color={theme.textDim} />
               <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700', textAlign: 'center', marginTop: 16 }}>
-                Subscription plans not set up yet
+                {t('premium.not_setup')}
               </Text>
               <Text style={{ color: theme.textDim, fontSize: 14, textAlign: 'center', marginTop: 12, lineHeight: 21 }}>
-                {offeringsErrorDetail || 'RevenueCat returned an empty offering.'}
-              </Text>
-              <Text style={{ color: theme.textDim, fontSize: 13, textAlign: 'center', marginTop: 16, lineHeight: 20 }}>
-                Dashboard fix: Offerings → Expense Sage Offering → add 3 packages (monthly, yearly, lifetime) and attach products to entitlement “Expense Tracker Premium”.
+                {offeringsErrorDetail || t('premium.empty_offering')}
               </Text>
               <TouchableOpacity
                 style={{ marginTop: 20, paddingHorizontal: 28, paddingVertical: 12, backgroundColor: '#8b5cf6', borderRadius: 20 }}
                 onPress={() => { setOfferingsError(false); setIsLoading(true); loadOfferings(); }}
               >
-                <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>{t('common.retry')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -200,13 +197,13 @@ export default function PaywallScreen({ onClose, isForced = false }: PaywallScre
                   disabled={isPurchasing}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.planName, { color: theme.text }]}>Monthly</Text>
+                    <Text style={[styles.planName, { color: theme.text }]}>{t('premium.monthly')}</Text>
                     {trialDaysLeft > 0 && (
-                      <Text style={[styles.planTrial, { color: '#8b5cf6' }]}>{trialDaysLeft} days trial left</Text>
+                      <Text style={[styles.planTrial, { color: '#8b5cf6' }]}>{t('common.days_trial_left', { count: trialDaysLeft })}</Text>
                     )}
                   </View>
                   <Text style={[styles.planPrice, { color: theme.text }]}>
-                    {findPackage('MONTHLY')!.product.priceString}/mo
+                    {findPackage('MONTHLY')!.product.priceString}{t('premium.per_month')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -219,18 +216,18 @@ export default function PaywallScreen({ onClose, isForced = false }: PaywallScre
                   disabled={isPurchasing}
                 >
                   <View style={styles.bestValueBadge}>
-                    <Text style={styles.bestValueText}>BEST VALUE</Text>
+                    <Text style={styles.bestValueText}>{t('premium.best_value')}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.planNameFeatured}>Annual</Text>
-                    <Text style={styles.planTrialFeatured}>Billed yearly</Text>
+                    <Text style={styles.planNameFeatured}>{t('premium.annual')}</Text>
+                    <Text style={styles.planTrialFeatured}>{t('premium.billed_yearly')}</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={styles.planPriceFeatured}>
                       {findPackage('YEARLY')!.product.priceString}
                     </Text>
                     <Text style={styles.planMonthlyPrice}>
-                      Only {(findPackage('YEARLY')!.product.price / 12).toFixed(2)}/mo
+                      {t('premium.only_per_month', { price: (findPackage('YEARLY')!.product.price / 12).toFixed(2) })}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -244,8 +241,8 @@ export default function PaywallScreen({ onClose, isForced = false }: PaywallScre
                   disabled={isPurchasing}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.planName, { color: theme.text }]}>Lifetime</Text>
-                    <Text style={[styles.planTrial, { color: theme.textDim }]}>One-time payment</Text>
+                    <Text style={[styles.planName, { color: theme.text }]}>{t('premium.lifetime')}</Text>
+                    <Text style={[styles.planTrial, { color: theme.textDim }]}>{t('premium.one_time')}</Text>
                   </View>
                   <Text style={[styles.planPrice, { color: theme.text }]}>
                     {findPackage('LIFETIME')!.product.priceString}
@@ -262,17 +259,17 @@ export default function PaywallScreen({ onClose, isForced = false }: PaywallScre
             
             <View style={styles.legalLinksRow}>
               <TouchableOpacity onPress={() => Linking.openURL('https://expense.alpha-devs.cloud/privacy/').catch(() => Alert.alert('Privacy Policy', 'Visit https://expense.alpha-devs.cloud/privacy/'))}>
-                <Text style={[styles.legalLinkText, { color: '#8b5cf6' }]}>Privacy Policy</Text>
+                <Text style={[styles.legalLinkText, { color: '#8b5cf6' }]}>{t('premium.privacy')}</Text>
               </TouchableOpacity>
               <Text style={[styles.legalDivider, { color: theme.textDim }]}>•</Text>
               <TouchableOpacity onPress={() => Linking.openURL('https://expense.alpha-devs.cloud/terms/').catch(() => Alert.alert('Terms of Use', 'Visit https://expense.alpha-devs.cloud/terms/'))}>
-                <Text style={[styles.legalLinkText, { color: '#8b5cf6' }]}>Terms of Use (EULA)</Text>
+                <Text style={[styles.legalLinkText, { color: '#8b5cf6' }]}>{t('premium.terms')}</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.footerDivider} />
             <Text style={[styles.footerText, { color: theme.textDim }]}>
-              Payment charged to your Apple ID account at confirmation of purchase. Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in App Store Account Settings.
+              {t('premium.legal')}
             </Text>
           </View>
         </ScrollView>
@@ -281,7 +278,7 @@ export default function PaywallScreen({ onClose, isForced = false }: PaywallScre
       {isPurchasing && (
         <BlurView intensity={20} tint="dark" style={styles.loadingOverlay}>
           <ActivityIndicator color="#fff" size="large" />
-          <Text style={styles.loadingText}>Processing...</Text>
+          <Text style={styles.loadingText}>{t('premium.processing')}</Text>
         </BlurView>
       )}
     </View>

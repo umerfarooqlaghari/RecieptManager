@@ -387,6 +387,7 @@ app.get('/api/reports/export/excel', requireAuth, requirePremium, async (req: Re
   try {
     const accessToken = req.headers.authorization?.split(' ')[1] || '';
     const userId: string = (req as any).user.id;
+    const targetCurrency = (req.query.targetCurrency as string || '').toUpperCase().trim();
     const filters = {
       userId,
       from: req.query.from as string,
@@ -398,31 +399,124 @@ app.get('/api/reports/export/excel', requireAuth, requirePremium, async (req: Re
 
     const ExcelJS = await import('exceljs');
     const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Expense Manager';
+    workbook.created = new Date();
+
     const worksheet = workbook.addWorksheet('Expenses');
 
-    worksheet.columns = [
-      { header: 'Date', key: 'date', width: 15 },
-      { header: 'Store', key: 'store_name', width: 25 },
-      { header: 'Category', key: 'category_name', width: 20 },
-      { header: 'Amount', key: 'total_amount', width: 12 },
-      { header: 'Tax', key: 'tax', width: 10 },
-      { header: 'Currency', key: 'currency', width: 10 },
-      { header: 'Items', key: 'items', width: 50 },
-    ];
+    const hasTargetCurrency = !!targetCurrency;
 
-    expenses.forEach((exp: any) => {
-      worksheet.addRow({
-        date: exp.date,
-        store_name: exp.store_name,
-        category_name: (exp.categories as any)?.name || 'Uncategorized',
-        total_amount: exp.amount,
-        tax: exp.tax || 0,
-        currency: exp.currency || 'USD',
-        items: Array.isArray(exp.expense_items)
-          ? exp.expense_items.map((i: any) => `${i.name} x${i.quantity} ($${i.price})`).join(', ')
-          : '',
-      });
+    if (hasTargetCurrency) {
+      worksheet.columns = [
+        { header: 'Date', key: 'date', width: 15 },
+        { header: 'Store', key: 'store_name', width: 26 },
+        { header: 'Category', key: 'category_name', width: 18 },
+        { header: 'Receipt Currency', key: 'receipt_currency', width: 16 },
+        { header: 'Receipt Amount', key: 'receipt_amount', width: 16 },
+        { header: 'Receipt Tax', key: 'receipt_tax', width: 14 },
+        { header: `Target (${targetCurrency})`, key: 'target_amount', width: 20 },
+        { header: `Target Tax (${targetCurrency})`, key: 'target_tax', width: 18 },
+        { header: 'Items Breakdown', key: 'items', width: 55 },
+      ];
+    } else {
+      worksheet.columns = [
+        { header: 'Date', key: 'date', width: 15 },
+        { header: 'Store', key: 'store_name', width: 26 },
+        { header: 'Category', key: 'category_name', width: 18 },
+        { header: 'Currency', key: 'currency', width: 14 },
+        { header: 'Amount', key: 'total_amount', width: 16 },
+        { header: 'Tax', key: 'tax', width: 14 },
+        { header: 'Items Breakdown', key: 'items', width: 55 },
+      ];
+    }
+
+    // Header styling
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 26;
+    headerRow.eachCell(cell => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4F46E5' }, // Indigo-600
+      };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
     });
+
+    let totalReceiptSum = 0;
+    let totalTargetSum = 0;
+
+    for (const exp of expenses) {
+      const recCur = (exp.currency || 'USD').toUpperCase().trim();
+      const recSymbol = currencyService.getCurrencySymbol(recCur);
+      const recAmount = Number(exp.amount) || 0;
+      const recTax = Number(exp.tax) || 0;
+      totalReceiptSum += recAmount;
+
+      // Extract items from expense_items or metadata fallback
+      const rawItems = Array.isArray(exp.expense_items) && exp.expense_items.length > 0
+        ? exp.expense_items
+        : Array.isArray((exp as any).metadata?.items)
+          ? (exp as any).metadata.items
+          : [];
+
+      const formattedItems = rawItems
+        .map((i: any) => {
+          const name = i.name || i.description || 'Item';
+          const qty = i.quantity || 1;
+          const price = Number(i.price) || 0;
+          return `${name} x${qty} (${recSymbol}${price.toFixed(2)})`;
+        })
+        .join(', ');
+
+      if (hasTargetCurrency) {
+        const { convertedAmount: convAmt } = await currencyService.convertCurrency(recAmount, recCur, targetCurrency);
+        const { convertedAmount: convTax } = await currencyService.convertCurrency(recTax, recCur, targetCurrency);
+        totalTargetSum += convAmt;
+
+        const row = worksheet.addRow({
+          date: exp.date,
+          store_name: exp.store_name || 'N/A',
+          category_name: (exp.categories as any)?.name || 'Uncategorized',
+          receipt_currency: recCur,
+          receipt_amount: `${recSymbol} ${recAmount.toFixed(2)}`,
+          receipt_tax: `${recSymbol} ${recTax.toFixed(2)}`,
+          target_amount: `${currencyService.getCurrencySymbol(targetCurrency)} ${convAmt.toFixed(2)}`,
+          target_tax: `${currencyService.getCurrencySymbol(targetCurrency)} ${convTax.toFixed(2)}`,
+          items: formattedItems,
+        });
+        row.alignment = { vertical: 'middle' };
+      } else {
+        const row = worksheet.addRow({
+          date: exp.date,
+          store_name: exp.store_name || 'N/A',
+          category_name: (exp.categories as any)?.name || 'Uncategorized',
+          currency: recCur,
+          total_amount: `${recSymbol} ${recAmount.toFixed(2)}`,
+          tax: `${recSymbol} ${recTax.toFixed(2)}`,
+          items: formattedItems,
+        });
+        row.alignment = { vertical: 'middle' };
+      }
+    }
+
+    // Add Total summary row
+    if (expenses.length > 0) {
+      if (hasTargetCurrency) {
+        const summaryRow = worksheet.addRow({
+          date: 'TOTAL',
+          store_name: `${expenses.length} Receipts`,
+          category_name: '',
+          receipt_currency: '',
+          receipt_amount: '',
+          receipt_tax: '',
+          target_amount: `${currencyService.getCurrencySymbol(targetCurrency)} ${totalTargetSum.toFixed(2)}`,
+          target_tax: '',
+          items: '',
+        });
+        summaryRow.font = { bold: true };
+      }
+    }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=expenses.xlsx');

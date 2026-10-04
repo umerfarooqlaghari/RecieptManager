@@ -45,17 +45,22 @@ export interface CreateExpenseData {
 const authHeader = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 function normalizeExpense(raw: any): Expense {
+  const rawItems = Array.isArray(raw?.expense_items) && raw.expense_items.length > 0
+    ? raw.expense_items
+    : Array.isArray(raw?.metadata?.items) && raw.metadata.items.length > 0
+      ? raw.metadata.items
+      : [];
+
   return {
     ...raw,
     amount: toAmount(raw?.amount),
     tax: toAmount(raw?.tax),
-    expense_items: Array.isArray(raw?.expense_items)
-      ? raw.expense_items.map((item: any) => ({
-          ...item,
-          price: toAmount(item?.price),
-          quantity: toAmount(item?.quantity, 1),
-        }))
-      : [],
+    expense_items: rawItems.map((item: any) => ({
+      ...item,
+      name: (item?.name || item?.description || 'Item').trim(),
+      price: toAmount(item?.price),
+      quantity: toAmount(item?.quantity, 1),
+    })),
   };
 }
 
@@ -79,6 +84,16 @@ export const fetchExpenses = async (token: string, filters: Record<string, any> 
   const data = await response.json();
   if (!Array.isArray(data)) return [];
   return data.map(normalizeExpense);
+};
+
+export const fetchExpenseById = async (token: string, id: string): Promise<Expense> => {
+  const response = await fetch(`${BACKEND_URL}/api/expenses/${id}`, {
+    headers: authHeader(token),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response, 'Failed to load expense details'));
+  }
+  return normalizeExpense(await response.json());
 };
 
 export const createExpense = async (token: string, data: CreateExpenseData): Promise<Expense> => {

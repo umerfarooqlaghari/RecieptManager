@@ -7,7 +7,7 @@ import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { LineChart } from 'react-native-gifted-charts';
 import ItemSpendingChart from '../components/ItemSpendingChart';
-import { fetchExpenses, deleteExpense, updateExpense, getReceiptUrl, createExpense, submitSupport, uploadProfilePicture, exportExpensesExcel } from '../services/expenseService';
+import { fetchExpenses, fetchExpenseById, deleteExpense, updateExpense, getReceiptUrl, createExpense, submitSupport, uploadProfilePicture, exportExpensesExcel } from '../services/expenseService';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../providers/ThemeProvider';
 import PaywallScreen from './PaywallScreen';
@@ -196,11 +196,29 @@ export default function HomeScreen() {
     }
   }, [isVisualizeVisible, session?.access_token]);
 
-  const safelySwitchModal = (setter: React.Dispatch<React.SetStateAction<boolean>>) => {
+  const [returnToReportsOnClose, setReturnToReportsOnClose] = useState(false);
+
+  const safelySwitchModal = (action: React.Dispatch<React.SetStateAction<boolean>> | (() => void)) => {
     setShowSettings(false);
     setTimeout(() => {
-      setter(true);
-    }, 400); // 400ms delay perfectly bypasses iOS silent modal conflict
+      if (typeof action === 'function') {
+        try {
+          (action as any)(true);
+        } catch {
+          (action as any)();
+        }
+      }
+    }, 350);
+  };
+
+  const closeDetailModal = () => {
+    setIsDetailModalVisible(false);
+    if (returnToReportsOnClose) {
+      setReturnToReportsOnClose(false);
+      setTimeout(() => {
+        setIsReportsVisible(true);
+      }, 350);
+    }
   };
 
   const loadCategories = async () => {
@@ -343,14 +361,14 @@ export default function HomeScreen() {
       await notifyExpenseLogged(result.scanResult?.storeName);
 
       await loadExpenses();
-      Alert.alert('Success', `Added from ${result.scanResult?.storeName}`);
+      Alert.alert(t('common.success'), t('scan.added_from', { store: result.scanResult?.storeName || 'Receipt' }));
     } catch (e: any) {
       if (e.name === 'AbortError') {
         console.error(`[SCAN] ❌ TIMEOUT — Could not reach backend at ${process.env.EXPO_PUBLIC_BACKEND_URL}`);
-        Alert.alert('Connection Timeout', 'The server took too long to respond. Please check your internet connection and try again.');
+        Alert.alert(t('scan.timeout_title'), t('scan.timeout_body'));
       } else {
         console.error(`[SCAN] ❌ Error:`, e.message, e);
-        Alert.alert('Scan Error', e.message);
+        Alert.alert(t('scan.error_title'), e.message);
       }
     }
     finally {
@@ -359,34 +377,83 @@ export default function HomeScreen() {
     }
   };
 
-  const handlePressTransaction = async (expense: any) => {
-    setSelectedExpense(expense);
+  const handlePressTransaction = async (expense: any, options?: { fromReports?: boolean }) => {
+    if (options?.fromReports) {
+      setReturnToReportsOnClose(true);
+      setIsReportsVisible(false);
+    }
+
+    const rawItems = Array.isArray(expense.expense_items) && expense.expense_items.length > 0
+      ? expense.expense_items
+      : Array.isArray((expense as any).metadata?.items)
+        ? (expense as any).metadata.items
+        : [];
+
+    const fullExpense = {
+      ...expense,
+      expense_items: rawItems,
+    };
+
+    setSelectedExpense(fullExpense);
     setEditedData({
       storeName: expense.store_name || '',
       amount: String(toAmount(expense.amount)),
-      currency: expense.currency || 'USD',
+      currency: expense.currency || selectedCurrency || 'USD',
       date: expense.date,
       categoryId: expense.category_id,
-      items: expense.expense_items ? [...expense.expense_items] : [],
+      items: rawItems.map((it: any) => ({
+        name: it.name || it.description || 'Item',
+        quantity: toAmount(it.quantity, 1),
+        price: toAmount(it.price),
+      })),
       tax: String(toAmount(expense.tax)),
     });
 
     setReceiptUrl(null);
     setIsEditing(false);
-    setShowItems(false);
-    setIsDetailModalVisible(true);
+    setShowItems(true); // SHOW ITEM BREAKDOWN BY DEFAULT!
+
+    if (options?.fromReports) {
+      setTimeout(() => {
+        setIsDetailModalVisible(true);
+      }, 350);
+    } else {
+      setIsDetailModalVisible(true);
+    }
+
     if (expense.receipt_image_key) {
-      try { const url = await getReceiptUrl(session?.access_token || '', expense.id); setReceiptUrl(url); } catch (e) { }
+      try {
+        const url = await getReceiptUrl(session?.access_token || '', expense.id);
+        setReceiptUrl(url);
+      } catch (e) {}
+    }
+
+    // If items were not included in list query, fetch single expense detail
+    if (rawItems.length === 0 && session?.access_token && expense.id) {
+      try {
+        const fresh = await fetchExpenseById(session.access_token, expense.id);
+        if (fresh && fresh.expense_items && fresh.expense_items.length > 0) {
+          setSelectedExpense((prev: any) => ({ ...prev, expense_items: fresh.expense_items }));
+          setEditedData((prev: any) => ({
+            ...prev,
+            items: (fresh.expense_items || []).map((it: any) => ({
+              name: it.name,
+              quantity: it.quantity,
+              price: it.price,
+            })),
+          }));
+        }
+      } catch {}
     }
   };
 
   const performDelete = async () => {
     try {
       await deleteExpense(session?.access_token || '', selectedExpense.id);
-      setIsDetailModalVisible(false);
+      closeDetailModal();
       loadExpenses();
-      if (isReportsVisible) loadReportData();
-    } catch (e: any) { Alert.alert('Error', e.message); }
+      if (returnToReportsOnClose || isReportsVisible) loadReportData();
+    } catch (e: any) { Alert.alert(t('common.error'), e.message); }
   };
 
   const handleAddManual = () => {
@@ -401,13 +468,13 @@ export default function HomeScreen() {
       tax: '0',
     });
     setIsEditing(true);
-    setShowItems(false);
+    setShowItems(true);
     setIsDetailModalVisible(true);
   };
 
   const performUpdate = async () => {
     try {
-      const total = editedData.items.reduce((acc: any, i: any) => acc + (i.price * i.quantity), 0);
+      const total = editedData.items.reduce((acc: any, i: any) => acc + (toAmount(i.price) * toAmount(i.quantity, 1)), 0);
       const amt = total > 0 ? total : parseFloat(editedData.amount || '0');
 
       if (selectedExpense) {
@@ -428,9 +495,11 @@ export default function HomeScreen() {
         });
       }
 
-      setIsEditing(false); loadExpenses(); setIsDetailModalVisible(false);
-      if (isReportsVisible) loadReportData();
-    } catch (e: any) { Alert.alert('Error', e.message); }
+      setIsEditing(false);
+      loadExpenses();
+      closeDetailModal();
+      if (returnToReportsOnClose || isReportsVisible) loadReportData();
+    } catch (e: any) { Alert.alert(t('common.error'), e.message); }
   };
 
   const faqItems = [
@@ -447,14 +516,14 @@ export default function HomeScreen() {
   ];
 
   const handleSupportSubmit = async () => {
-    if (!supportForm.subject || !supportForm.message) return Alert.alert('Error', 'Please fill all fields');
+    if (!supportForm.subject || !supportForm.message) return Alert.alert(t('common.error'), t('support.fill_all'));
     setIsSubmittingSupport(true);
     try {
       await submitSupport(session?.access_token || '', supportForm);
-      Alert.alert('Success', 'Support message sent!');
+      Alert.alert(t('common.success'), t('support.sent'));
       setSupportForm({ subject: '', message: '' });
       setIsSupportVisible(false);
-    } catch (e: any) { Alert.alert('Error', e.message); }
+    } catch (e: any) { Alert.alert(t('common.error'), e.message); }
     finally { setIsSubmittingSupport(false); }
   };
 
@@ -562,8 +631,8 @@ export default function HomeScreen() {
         setIsUpdatingProfile(true);
         const upload = await uploadProfilePicture(session?.access_token || '', res.assets[0].base64, res.assets[0].mimeType);
         setProfileForm({ ...profileForm, avatar: upload.url });
-        Alert.alert('Success', 'Profile picture updated locally. Save to confirm.');
-      } catch (e: any) { Alert.alert('Error', e.message); }
+        Alert.alert(t('common.success'), t('profile.photo_updated'));
+      } catch (e: any) { Alert.alert(t('common.error'), e.message); }
       finally { setIsUpdatingProfile(false); }
     }
   };
@@ -586,12 +655,12 @@ export default function HomeScreen() {
 
       if (emailChanged) {
         setIsOtpVisible(true);
-        Alert.alert('Verification', 'Please enter the OTP sent to your new email.');
+        Alert.alert(t('profile.verification'), t('profile.enter_otp_new_email'));
       } else {
-        Alert.alert('Success', 'Profile updated!');
+        Alert.alert(t('common.success'), t('profile.updated'));
         setIsProfileVisible(false);
       }
-    } catch (e: any) { Alert.alert('Error', e.message); }
+    } catch (e: any) { Alert.alert(t('common.error'), e.message); }
     finally { setIsUpdatingProfile(false); }
   };
 
@@ -603,7 +672,7 @@ export default function HomeScreen() {
         type: 'email_change'
       });
       if (error) throw error;
-      Alert.alert('Email Updated', 'Your email address has been changed successfully.');
+      Alert.alert(t('profile.email_updated'), t('profile.email_updated_body'));
       setIsOtpVisible(false);
       setIsProfileVisible(false);
     } catch (e: any) { Alert.alert(t('common.error'), e.message); }
@@ -620,10 +689,11 @@ export default function HomeScreen() {
       await exportExpensesExcel(session?.access_token || '', {
         from: customRange.from || undefined,
         to: customRange.to || undefined,
-        categoryId: reportCategoryId || undefined
+        categoryId: reportCategoryId || undefined,
+        targetCurrency: selectedCurrency,
       });
-      Alert.alert('Success', 'Excel report downloaded and shared!');
-    } catch (e: any) { Alert.alert('Error', e.message); }
+      Alert.alert(t('common.success'), t('reports.export_success'));
+    } catch (e: any) { Alert.alert(t('common.error'), e.message || t('reports.export_failed')); }
     finally { setIsExporting(false); }
   };
 
@@ -693,12 +763,12 @@ export default function HomeScreen() {
 
   const handleScanPress = () => {
     if (scanning) return;
-    Alert.alert('Scan', 'Choose source', [
+    Alert.alert(t('scan.title'), t('scan.choose_source'), [
       {
-        text: 'Camera', onPress: async () => {
+        text: t('scan.camera'), onPress: async () => {
           const { status } = await ImagePicker.requestCameraPermissionsAsync();
           if (status !== 'granted') {
-            Alert.alert('Permission Required', 'Camera access is needed to scan receipts. Please enable it in Settings.');
+            Alert.alert(t('scan.permission_required'), t('scan.camera_permission'));
             return;
           }
           const res = await ImagePicker.launchCameraAsync({ base64: true });
@@ -706,17 +776,17 @@ export default function HomeScreen() {
         }
       },
       {
-        text: 'Gallery', onPress: async () => {
+        text: t('scan.gallery'), onPress: async () => {
           const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (status !== 'granted') {
-            Alert.alert('Permission Required', 'Photo library access is needed to import receipts. Please enable it in Settings.');
+            Alert.alert(t('scan.permission_required'), t('scan.gallery_permission'));
             return;
           }
           const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], base64: true });
           if (!res.canceled) processReceipt(res.assets[0].base64, res.assets[0].mimeType);
         }
       },
-      { text: 'Cancel', style: 'cancel' }
+      { text: t('common.cancel'), style: 'cancel' }
     ]);
   };
 
@@ -736,7 +806,7 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.topBackground, { backgroundColor: isDark ? theme.background : '#eee' }]}>
+      <View pointerEvents="none" style={[styles.topBackground, { backgroundColor: isDark ? theme.background : '#eee' }]}>
         <View style={[styles.blobPurple, { backgroundColor: theme.blob1 }]} />
         <View style={[styles.blobTeal, { backgroundColor: theme.blob2 }]} />
         <View style={[styles.blobLight, { backgroundColor: theme.blob3 }]} />
@@ -767,7 +837,7 @@ export default function HomeScreen() {
               {!isPremium && trialDaysLeft > 0 && (
                 <View style={styles.trialBadge}>
                   <Ionicons name="time-outline" size={12} color="#8b5cf6" />
-                  <Text style={styles.trialBadgeText}>{trialDaysLeft} days trial left</Text>
+                  <Text style={styles.trialBadgeText}>{t('common.days_trial_left', { count: trialDaysLeft })}</Text>
                 </View>
               )}
             </View>
@@ -957,20 +1027,20 @@ export default function HomeScreen() {
             <Text style={styles.emptyText}>
               {selectedMonth === 'all'
                 ? t('home.no_transactions')
-                : `No expenses found for ${t(`months.${selectedMonth}`)}`}
+                : t('home.no_expenses_month', { month: t(`months.${selectedMonth}`) })}
             </Text>
           </View>
         ) : (
           displayedExpenses.map((e) => (
-            <TouchableOpacity key={e.id} style={styles.txCard} onPress={() => handlePressTransaction(e)}>
-              <BlurView intensity={isDark ? 30 : 100} tint={isDark ? "light" : "default"} style={[styles.txBlur, { backgroundColor: theme.card }]}>
+            <TouchableOpacity key={e.id} style={styles.txCard} onPress={() => handlePressTransaction(e)} activeOpacity={0.7}>
+              <View style={[styles.txBlur, { backgroundColor: theme.card }]}>
                 <View style={[styles.txIcon, { backgroundColor: (e.categories?.color || '#3b82f6') + '25' }]}>
                   <Ionicons name={(e.categories?.icon || 'card') as any} size={20} color={e.categories?.color || (isDark ? "#fff" : theme.text)} />
                 </View>
                 <View style={styles.txContent}>
                   <View style={styles.txTopRow}>
                     <Text style={[styles.txStore, { color: theme.text }]} numberOfLines={1} ellipsizeMode="tail">
-                      {e.store_name || 'N/A'}
+                      {e.store_name || t('common.na')}
                     </Text>
                     <Text style={[styles.txAmount, { color: theme.text }]}>
                       {getCurrencySymbol(e.currency || selectedCurrency)} {formatMoney(e.amount)}
@@ -982,12 +1052,12 @@ export default function HomeScreen() {
                     </Text>
                     {e.categories?.name && (
                       <Text style={[styles.txCategoryTag, { color: e.categories?.color || theme.textDim }]}>
-                        {e.categories.name}
+                        {t(`categories.${e.categories.name}`, { defaultValue: e.categories.name })}
                       </Text>
                     )}
                   </View>
                 </View>
-              </BlurView>
+              </View>
             </TouchableOpacity>
           ))
         )}
@@ -999,7 +1069,7 @@ export default function HomeScreen() {
         <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]}>
           <SafeAreaView style={{ flex: 1 }}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Profile</Text>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>{t('profile.title')}</Text>
               <TouchableOpacity onPress={() => setIsProfileVisible(false)}><Ionicons name="close" size={24} color={theme.text} /></TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 24 }}>
@@ -1014,11 +1084,11 @@ export default function HomeScreen() {
                   )}
                   <View style={styles.editIconBadge}><Ionicons name="camera" size={16} color="#fff" /></View>
                 </TouchableOpacity>
-                <Text style={{ color: isDark ? 'rgba(255,255,255,0.5)' : '#64748b', fontSize: 13, marginTop: 12 }}>Tap to change photo</Text>
+                <Text style={{ color: isDark ? 'rgba(255,255,255,0.5)' : '#64748b', fontSize: 13, marginTop: 12 }}>{t('profile.edit_photo')}</Text>
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={[styles.editLabel, { color: isDark ? '#a1a1aa' : '#64748b' }]}>First Name</Text>
+                <Text style={[styles.editLabel, { color: isDark ? '#a1a1aa' : '#64748b' }]}>{t('profile.first_name')}</Text>
                 <TextInput
                   style={[
                     styles.input,
@@ -1035,7 +1105,7 @@ export default function HomeScreen() {
                 />
               </View>
               <View style={styles.formGroup}>
-                <Text style={[styles.editLabel, { color: isDark ? '#a1a1aa' : '#64748b' }]}>Last Name</Text>
+                <Text style={[styles.editLabel, { color: isDark ? '#a1a1aa' : '#64748b' }]}>{t('profile.last_name')}</Text>
                 <TextInput
                   style={[
                     styles.input,
@@ -1052,7 +1122,7 @@ export default function HomeScreen() {
                 />
               </View>
               <View style={styles.formGroup}>
-                <Text style={[styles.editLabel, { color: isDark ? '#a1a1aa' : '#64748b' }]}>Phone</Text>
+                <Text style={[styles.editLabel, { color: isDark ? '#a1a1aa' : '#64748b' }]}>{t('profile.phone')}</Text>
                 <TextInput
                   style={[
                     styles.input,
@@ -1070,7 +1140,7 @@ export default function HomeScreen() {
                 />
               </View>
               <View style={styles.formGroup}>
-                <Text style={[styles.editLabel, { color: isDark ? '#a1a1aa' : '#64748b' }]}>Email</Text>
+                <Text style={[styles.editLabel, { color: isDark ? '#a1a1aa' : '#64748b' }]}>{t('profile.email')}</Text>
                 <TextInput
                   style={[
                     styles.input,
@@ -1090,15 +1160,27 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.profileTabs}>
-                <TouchableOpacity style={[styles.profileTabItem, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setIsSubscriptionVisible(true)}>
+                <TouchableOpacity
+                  style={[styles.profileTabItem, { backgroundColor: theme.card, borderColor: theme.border }]}
+                  onPress={() => {
+                    setIsProfileVisible(false);
+                    setTimeout(() => setIsSubscriptionVisible(true), 350);
+                  }}
+                >
                   <View style={[styles.profileTabIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}><Ionicons name="card-outline" size={20} color="#3b82f6" /></View>
-                  <Text style={[styles.profileTabText, { color: theme.text }]}>Subscriptions</Text>
+                  <Text style={[styles.profileTabText, { color: theme.text }]}>{t('profile.subscriptions')}</Text>
                   <Ionicons name="chevron-forward" size={16} color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.profileTabItem, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setIsCurrencyPickerVisible(true)}>
+                <TouchableOpacity
+                  style={[styles.profileTabItem, { backgroundColor: theme.card, borderColor: theme.border }]}
+                  onPress={() => {
+                    setIsProfileVisible(false);
+                    setTimeout(() => setIsCurrencyPickerVisible(true), 350);
+                  }}
+                >
                   <View style={[styles.profileTabIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}><Ionicons name="cash-outline" size={20} color="#10b981" /></View>
-                  <Text style={[styles.profileTabText, { color: theme.text }]}>Currency</Text>
+                  <Text style={[styles.profileTabText, { color: theme.text }]}>{t('profile.currency')}</Text>
                   <Text style={{ color: '#10b981', fontWeight: '700', marginRight: 8 }}>{currencySymbol} {selectedCurrency}</Text>
                   <Ionicons name="chevron-forward" size={16} color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} />
                 </TouchableOpacity>
@@ -1118,7 +1200,7 @@ export default function HomeScreen() {
 
                 <TouchableOpacity style={[styles.profileTabItem, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={toggleTheme}>
                   <View style={[styles.profileTabIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}><Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={20} color={isDark ? "#8b5cf6" : "#3b82f6"} /></View>
-                  <Text style={[styles.profileTabText, { color: theme.text }]}>{isDark ? 'Night Mode' : 'Day Mode'}</Text>
+                  <Text style={[styles.profileTabText, { color: theme.text }]}>{isDark ? t('profile.night_mode') : t('profile.day_mode')}</Text>
                   <Ionicons name="repeat-outline" size={16} color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} />
                 </TouchableOpacity>
               </View>
@@ -1130,7 +1212,7 @@ export default function HomeScreen() {
               >
                 {isUpdatingProfile ? <ActivityIndicator color="#fff" /> : (
                   <>
-                    <Text style={styles.saveBtnProfessionalText}>Save Changes</Text>
+                    <Text style={styles.saveBtnProfessionalText}>{t('profile.save_changes')}</Text>
                     <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginLeft: 8 }} />
                   </>
                 )}
@@ -1161,7 +1243,7 @@ export default function HomeScreen() {
           <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]}>
             <SafeAreaView style={{ flex: 1 }}>
               <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>Privacy & Terms</Text>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>{t('settings.privacy_terms')}</Text>
                 <TouchableOpacity onPress={() => setIsPrivacyVisible(false)}><Ionicons name="close" size={24} color={theme.text} /></TouchableOpacity>
               </View>
               <ScrollView contentContainerStyle={{ padding: 24 }}>
@@ -1193,8 +1275,8 @@ export default function HomeScreen() {
         <Modal visible={isOtpVisible} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={[styles.supportForm, { width: '90%', backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
-              <Text style={[styles.modalTitle, { fontSize: 20, marginBottom: 10, color: theme.text }]}>Confirm Email Change</Text>
-              <Text style={{ color: theme.textDim, marginBottom: 20 }}>Enter the verification code sent to {profileForm.email}</Text>
+              <Text style={[styles.modalTitle, { fontSize: 20, marginBottom: 10, color: theme.text }]}>{t('profile.confirm_email_change')}</Text>
+              <Text style={{ color: theme.textDim, marginBottom: 20 }}>{t('profile.otp_sent_to', { email: profileForm.email })}</Text>
               <TextInput
                 style={[
                   styles.input,
@@ -1215,9 +1297,9 @@ export default function HomeScreen() {
                 placeholderTextColor={theme.textDim}
               />
               <TouchableOpacity style={[styles.saveBtn, { marginTop: 20, height: 50, borderRadius: 12, backgroundColor: theme.button }]} onPress={verifyOtp}>
-                <Text style={styles.saveBtnText}>Verify OTP</Text>
+                <Text style={styles.saveBtnText}>{t('profile.verify_otp')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={{ marginTop: 15, alignItems: 'center' }} onPress={() => setIsOtpVisible(false)}><Text style={{ color: theme.textDim }}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity style={{ marginTop: 15, alignItems: 'center' }} onPress={() => setIsOtpVisible(false)}><Text style={{ color: theme.textDim }}>{t('common.cancel')}</Text></TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -1227,7 +1309,7 @@ export default function HomeScreen() {
         <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]}>
           <SafeAreaView style={{ flex: 1 }}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Customer Support</Text>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>{t('support.title')}</Text>
               <TouchableOpacity onPress={() => setIsSupportVisible(false)}><Ionicons name="close" size={24} color={theme.text} /></TouchableOpacity>
             </View>
 
@@ -1251,7 +1333,7 @@ export default function HomeScreen() {
               <View style={[styles.supportForm, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <View style={styles.supportFormHeader}>
                   <Ionicons name="chatbubble-ellipses-outline" size={18} color="#3b82f6" />
-                  <Text style={[styles.supportFormTitle, { color: theme.text }]}>Send us a Message</Text>
+                  <Text style={[styles.supportFormTitle, { color: theme.text }]}>{t('support.send_us')}</Text>
                 </View>
 
                 <View style={styles.formGroup}>
@@ -1317,7 +1399,7 @@ export default function HomeScreen() {
         <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]}>
           <SafeAreaView style={{ flex: 1 }}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Visualize Spendings</Text>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>{t('visualize.title')}</Text>
               <TouchableOpacity onPress={() => setIsVisualizeVisible(false)}><Ionicons name="close" size={24} color={theme.text} /></TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 24 }}>
@@ -1330,17 +1412,17 @@ export default function HomeScreen() {
               />
 
               <View style={[styles.visualCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <Text style={[styles.visualCardTitle, { color: theme.text }]}>Spending by Category</Text>
+                <Text style={[styles.visualCardTitle, { color: theme.text }]}>{t('visualize.by_category')}</Text>
                 {getCategoryStats().length === 0 ? (
                   <View style={{ height: 100, justifyContent: 'center', alignItems: 'center' }}>
-                    <Text style={{ color: theme.textDim }}>No data available for the period</Text>
+                    <Text style={{ color: theme.textDim }}>{t('visualize.no_data')}</Text>
                   </View>
                 ) : (
                   <>
                     <View style={styles.chartContainer}>
                       {getCategoryStats().slice(0, 5).map((stat, i) => (
                         <View key={i} style={styles.chartBarRow}>
-                          <Text style={[styles.chartBarLabel, { color: theme.text }]}>{stat.name}</Text>
+                          <Text style={[styles.chartBarLabel, { color: theme.text }]}>{t(`categories.${stat.name}`, { defaultValue: stat.name })}</Text>
                           <View style={[styles.chartBarTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderColor: theme.border }]}>
                             <View style={[styles.chartBarFill, { width: `${(stat.amount / getCategoryStats()[0].amount) * 100}%`, backgroundColor: stat.color }]} />
                           </View>
@@ -1352,11 +1434,11 @@ export default function HomeScreen() {
                     <View style={styles.statsGrid}>
                       <View style={[styles.statsCard, { backgroundColor: 'rgba(139,92,246,0.1)' }]}>
                         <Text style={[styles.statsValue, { color: theme.text }]}>{currencySymbol}{formatMoney(getAdvancedStats().avg, 0)}</Text>
-                        <Text style={[styles.statsLabel, { color: theme.textDim }]}>Avg. Daily</Text>
+                        <Text style={[styles.statsLabel, { color: theme.textDim }]}>{t('visualize.avg_daily')}</Text>
                       </View>
                       <View style={[styles.statsCard, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                        <Text style={[styles.statsValue, { color: theme.text }]} numberOfLines={1}>{getAdvancedStats().topCat}</Text>
-                        <Text style={[styles.statsLabel, { color: theme.textDim }]}>Top Category</Text>
+                        <Text style={[styles.statsValue, { color: theme.text }]} numberOfLines={1}>{t(`categories.${getAdvancedStats().topCat}`, { defaultValue: getAdvancedStats().topCat })}</Text>
+                        <Text style={[styles.statsLabel, { color: theme.textDim }]}>{t('visualize.top_category')}</Text>
                       </View>
                     </View>
                   </>
@@ -1385,7 +1467,7 @@ export default function HomeScreen() {
                 <Ionicons name="search" size={16} color={theme.textDim} style={{ marginRight: 8 }} />
                 <TextInput
                   style={[styles.searchInput, { color: theme.text }]}
-                  placeholder="Search store..."
+                  placeholder={t('reports.search_store')}
                   placeholderTextColor={theme.textDim}
                   value={reportStoreName}
                   onChangeText={setReportStoreName}
@@ -1396,7 +1478,7 @@ export default function HomeScreen() {
                   onPress={() => setReportCategoryId(null)}
                   style={[styles.miniCatBtn, { backgroundColor: theme.card, borderColor: theme.border }, !reportCategoryId && styles.miniCatActive]}
                 >
-                  <Text style={[styles.miniCatText, { color: theme.textDim }, !reportCategoryId && { color: '#fff' }]}>All Categories</Text>
+                  <Text style={[styles.miniCatText, { color: theme.textDim }, !reportCategoryId && { color: '#fff' }]}>{t('reports.all_categories')}</Text>
                 </TouchableOpacity>
                 {categories.map(cat => (
                   <TouchableOpacity
@@ -1405,7 +1487,9 @@ export default function HomeScreen() {
                     style={[styles.miniCatBtn, { backgroundColor: theme.card, borderColor: theme.border }, reportCategoryId === cat.id && styles.miniCatActive, reportCategoryId === cat.id && { backgroundColor: cat.color + '40' }]}
                   >
                     <Ionicons name={cat.icon as any} size={12} color={cat.color} style={{ marginRight: 4 }} />
-                    <Text style={[styles.miniCatText, { color: theme.textDim }, reportCategoryId === cat.id && { color: '#fff' }]}>{cat.name}</Text>
+                    <Text style={[styles.miniCatText, { color: theme.textDim }, reportCategoryId === cat.id && { color: '#fff' }]}>
+                      {t(`categories.${cat.name}`, { defaultValue: cat.name })}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -1422,7 +1506,7 @@ export default function HomeScreen() {
             {reportPeriod === 'custom' && (
               <View style={[styles.customRangeRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <TextInput style={[styles.customInput, { color: theme.text, borderBottomColor: theme.border }]} placeholder="YYYY-MM-DD" placeholderTextColor={theme.textDim} value={customRange.from} onChangeText={t => setCustomRange({ ...customRange, from: t })} />
-                <Text style={{ color: theme.text }}>to</Text>
+                <Text style={{ color: theme.text }}>{t('common.to')}</Text>
                 <TextInput style={[styles.customInput, { color: theme.text, borderBottomColor: theme.border }]} placeholder="YYYY-MM-DD" placeholderTextColor={theme.textDim} value={customRange.to} onChangeText={t => setCustomRange({ ...customRange, to: t })} />
                 <TouchableOpacity onPress={loadReportData}><Ionicons name="search" size={24} color="#3b82f6" /></TouchableOpacity>
               </View>
@@ -1435,20 +1519,20 @@ export default function HomeScreen() {
 
             <View style={[styles.excelTable, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={[styles.tableHeader, { backgroundColor: isDark ? '#18181b' : '#f1f5f9', borderBottomColor: theme.border }]}>
-                <Text style={[styles.tableHeadText, { color: theme.textDim, flex: 1.2 }]}>DATE</Text>
-                <Text style={[styles.tableHeadText, { color: theme.textDim, flex: 2.5 }]}>STORE</Text>
-                <Text style={[styles.tableHeadText, { color: theme.textDim, flex: 1.3, textAlign: 'right' }]}>AMOUNT</Text>
+                <Text style={[styles.tableHeadText, { color: theme.textDim, flex: 1.2 }]}>{t('reports.col_date')}</Text>
+                <Text style={[styles.tableHeadText, { color: theme.textDim, flex: 2.5 }]}>{t('reports.col_store')}</Text>
+                <Text style={[styles.tableHeadText, { color: theme.textDim, flex: 1.3, textAlign: 'right' }]}>{t('reports.col_amount')}</Text>
               </View>
               <ScrollView showsVerticalScrollIndicator={false}>
                 {isReportLoading ? <ActivityIndicator style={{ marginTop: 20 }} color="#3b82f6" /> :
                   reportExpenses.map((re, idx) => (
-                    <TouchableOpacity key={re.id} onPress={() => handlePressTransaction(re)} style={[styles.tableRow, { borderBottomColor: theme.border }, idx % 2 === 0 && { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }]}>
+                    <TouchableOpacity key={re.id} onPress={() => handlePressTransaction(re, { fromReports: true })} style={[styles.tableRow, { borderBottomColor: theme.border }, idx % 2 === 0 && { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }]}>
                       <Text style={[styles.tableCell, { color: theme.textDim, flex: 1.2, fontSize: 11 }]}>{re.date.split('-').slice(1).join('/')}</Text>
-                      <Text style={[styles.tableCell, { color: theme.text, flex: 2.5, fontWeight: '600' }]} numberOfLines={1}>{re.store_name || 'N/A'}</Text>
+                      <Text style={[styles.tableCell, { color: theme.text, flex: 2.5, fontWeight: '600' }]} numberOfLines={1}>{re.store_name || t('common.na')}</Text>
                       <Text style={[styles.tableCell, { flex: 1.3, textAlign: 'right', fontWeight: '800', color: theme.text }]}>{getCurrencySymbol(re.currency || selectedCurrency)}{formatMoney(re.amount)}</Text>
                     </TouchableOpacity>
                   ))}
-                {reportExpenses.length === 0 && !isReportLoading && <Text style={[styles.noRepo, { color: theme.textDim }]}>No data for this period.</Text>}
+                {reportExpenses.length === 0 && !isReportLoading && <Text style={[styles.noRepo, { color: theme.textDim }]}>{t('reports.no_data_period')}</Text>}
               </ScrollView>
             </View>
 
@@ -1459,7 +1543,7 @@ export default function HomeScreen() {
             >
               {isExporting ? <ActivityIndicator color="#fff" /> : (
                 <>
-                  <Text style={styles.saveBtnProfessionalText}>Export to Excel</Text>
+                  <Text style={styles.saveBtnProfessionalText}>{t('reports.export_btn')}</Text>
                   <Ionicons name="download-outline" size={20} color="#fff" style={{ marginLeft: 8 }} />
                 </>
               )}
@@ -1469,23 +1553,39 @@ export default function HomeScreen() {
       </Modal>
 
       {/* Transaction Detail Modal */}
-      <Modal visible={isDetailModalVisible} animationType="fade" transparent>
+      <Modal visible={isDetailModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setIsDetailModalVisible(false)} />
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={closeDetailModal} />
           <View style={[styles.detailCard, { backgroundColor: theme.background }]}>
             <View style={styles.detailTop}>
-              <Text style={[styles.detailTitle, { color: theme.textDim }]}>{isEditing ? t('manual_add.title_edit') : t('manual_add.transaction_detail')}</Text>
+              <Text style={[styles.detailTitle, { color: theme.textDim }]}>
+                {isEditing ? t('manual_add.title_edit') : t('manual_add.transaction_detail')}
+              </Text>
               <View style={styles.detailAct}>
                 {!isEditing && (
                   <>
-                    <TouchableOpacity onPress={() => setIsEditing(true)}><Feather name="edit" size={20} color={theme.text} /></TouchableOpacity>
-                    <TouchableOpacity onPress={() => Alert.alert('Delete', 'Confirm?', [{ text: 'No' }, { text: 'Yes', style: 'destructive', onPress: performDelete }])}><Ionicons name="trash-outline" size={22} color="#ff4b4b" /></TouchableOpacity>
+                    <TouchableOpacity onPress={() => setIsEditing(true)}>
+                      <Feather name="edit" size={20} color={theme.text} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() =>
+                        Alert.alert(t('manual_add.delete'), t('manual_add.delete_confirm'), [
+                          { text: t('common.no') },
+                          { text: t('common.yes'), style: 'destructive', onPress: performDelete },
+                        ])
+                      }
+                    >
+                      <Ionicons name="trash-outline" size={22} color="#ff4b4b" />
+                    </TouchableOpacity>
                   </>
                 )}
-                <TouchableOpacity onPress={() => setIsDetailModalVisible(false)}><Ionicons name="close" size={24} color={theme.text} /></TouchableOpacity>
+                <TouchableOpacity onPress={closeDetailModal}>
+                  <Ionicons name="close" size={24} color={theme.text} />
+                </TouchableOpacity>
               </View>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
               {isEditing ? (
                 <View style={styles.editForm}>
                   <Text style={[styles.editLabel, { color: theme.textDim }]}>{t('manual_add.store')}</Text>
@@ -1542,7 +1642,9 @@ export default function HomeScreen() {
                         style={[styles.miniCatBtn, { backgroundColor: theme.card, borderColor: theme.border }, editedData.categoryId === c.id && styles.miniCatActive]}
                       >
                         <Ionicons name={c.icon as any} size={14} color={c.color} style={{ marginRight: 8 }} />
-                        <Text style={[styles.miniCatText, { color: theme.textDim }, editedData.categoryId === c.id && { color: '#fff' }]}>{c.name}</Text>
+                        <Text style={[styles.miniCatText, { color: theme.textDim }, editedData.categoryId === c.id && { color: '#fff' }]}>
+                          {t(`categories.${c.name}`, { defaultValue: c.name })}
+                        </Text>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
@@ -1597,59 +1699,171 @@ export default function HomeScreen() {
                   </View>
                 </View>
               ) : (
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={[styles.bigAmt, { color: theme.text }]}>{getCurrencySymbol(selectedExpense?.currency || selectedCurrency)}{formatMoney(selectedExpense?.amount)}</Text>
-                  <Text style={[styles.bigStore, { color: theme.textDim }]}>{selectedExpense?.store_name}</Text>
-                  <View style={styles.badgeRow}>
-                    <View style={[styles.catBadge, { backgroundColor: (selectedExpense?.categories?.color || '#3b82f6') + '20' }]}>
-                      <Ionicons name={(selectedExpense?.categories?.icon || 'card') as any} size={14} color={selectedExpense?.categories?.color || '#3b82f6'} />
-                      <Text style={[styles.catBadgeText, { color: selectedExpense?.categories?.color || '#3b82f6' }]}>{selectedExpense?.categories?.name || 'Uncategorized'}</Text>
-                    </View>
-                    <Text style={[styles.detailDateText, { color: theme.textDim }]}>{selectedExpense?.date ? new Date(selectedExpense.date).toLocaleDateString(undefined, { dateStyle: 'long' }) : ''}</Text>
-                  </View>
-                  {!showItems ? (
-                    <TouchableOpacity style={[styles.viewDetailsBtn, { backgroundColor: theme.button + '20' }]} onPress={() => setShowItems(true)}>
-                      <Text style={[styles.viewDetailsText, { color: theme.button }]}>{t('common.view_details')}</Text>
-                      <Ionicons name="chevron-down" size={16} color={theme.button} />
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={{ width: '100%', alignItems: 'center' }}>
-                      <TouchableOpacity style={[styles.viewDetailsBtn, { backgroundColor: theme.button + '20' }]} onPress={() => setShowItems(false)}>
-                        <Text style={[styles.viewDetailsText, { color: theme.button }]}>{t('common.hide_details')}</Text>
-                        <Ionicons name="chevron-up" size={16} color={theme.button} />
-                      </TouchableOpacity>
-                      {selectedExpense?.expense_items?.length > 0 && (
-                        <View style={[styles.itemsList, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
-                          {(() => {
-                            const grouped: any = {};
-                            selectedExpense.expense_items.forEach((i: any) => {
-                              const name = i.name.toUpperCase();
-                              if (!grouped[name]) grouped[name] = { ...i, quantity: 0, price: 0 };
-                              grouped[name].quantity += (i.quantity || 1);
-                              grouped[name].price = i.price; // Keep price per item
-                            });
-                            return Object.values(grouped).map((item: any) => (
-                              <View key={item.id} style={styles.itemRow}>
-                                <Text style={[styles.itemName, { color: theme.textDim }]}>{item.name} x{item.quantity}</Text>
-                                <Text style={[styles.itemPrice, { color: theme.text }]}>{getCurrencySymbol(selectedExpense?.currency || selectedCurrency)}{formatMoney(toAmount(item.price) * toAmount(item.quantity))}</Text>
-                              </View>
-                            ));
-                          })()}
-                          {selectedExpense?.tax > 0 && (
-                            <View style={[styles.itemRow, { borderTopWidth: 1, borderTopColor: theme.border, marginTop: 8, paddingTop: 8 }]}>
-                              <Text style={[styles.itemName, { fontWeight: '700', color: theme.text }]}>TAX</Text>
-                              <Text style={[styles.itemPrice, { fontWeight: '700', color: theme.text }]}>{getCurrencySymbol(selectedExpense?.currency || selectedCurrency)}{formatMoney(selectedExpense.tax)}</Text>
+                <View style={{ width: '100%' }}>
+                  {(() => {
+                    const expCurrency = (selectedExpense?.currency || selectedCurrency || 'USD').toUpperCase();
+                    const expSym = getCurrencySymbol(expCurrency);
+                    const isDiff = expCurrency !== selectedCurrency.toUpperCase();
+                    const convertedVal = convertCurrencyLocally(toAmount(selectedExpense?.amount), expCurrency, selectedCurrency);
+                    const items = Array.isArray(selectedExpense?.expense_items) ? selectedExpense.expense_items : [];
+
+                    return (
+                      <>
+                        <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                          <Text style={[styles.bigAmt, { color: theme.text }]}>
+                            {expSym} {formatMoney(selectedExpense?.amount)}
+                          </Text>
+                          {isDiff && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: 'rgba(16, 185, 129, 0.12)', borderRadius: 12 }}>
+                              <Ionicons name="swap-horizontal" size={14} color="#10b981" />
+                              <Text style={{ color: '#10b981', fontSize: 13, fontWeight: '700' }}>
+                                {t('detail.converted', {
+                                  amount: `${currencySymbol} ${formatMoney(convertedVal)}`,
+                                  code: selectedCurrency
+                                })}
+                              </Text>
                             </View>
                           )}
+                          <Text style={[styles.bigStore, { color: theme.textDim, marginTop: 8, marginBottom: 12 }]}>
+                            {selectedExpense?.store_name || t('common.na')}
+                          </Text>
+
+                          <View style={styles.badgeRow}>
+                            <View style={[styles.catBadge, { backgroundColor: (selectedExpense?.categories?.color || '#3b82f6') + '20' }]}>
+                              <Ionicons
+                                name={(selectedExpense?.categories?.icon || 'card') as any}
+                                size={14}
+                                color={selectedExpense?.categories?.color || '#3b82f6'}
+                              />
+                              <Text style={[styles.catBadgeText, { color: selectedExpense?.categories?.color || '#3b82f6' }]}>
+                                {selectedExpense?.categories?.name ? t(`categories.${selectedExpense.categories.name}`, { defaultValue: selectedExpense.categories.name }) : t('common.uncategorized')}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Ionicons name="calendar-outline" size={13} color={theme.textDim} />
+                              <Text style={[styles.detailDateText, { color: theme.textDim }]}>
+                                {selectedExpense?.date ? new Date(selectedExpense.date).toLocaleDateString(undefined, { dateStyle: 'medium' }) : ''}
+                              </Text>
+                            </View>
+                          </View>
                         </View>
-                      )}
-                    </View>
-                  )}
-                  {selectedExpense?.receipt_image_key && (
-                    <View style={[styles.receiptPrev, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
-                      {receiptUrl ? <Image source={{ uri: receiptUrl }} style={styles.receiptImg} resizeMode="contain" /> : <ActivityIndicator color="#3b82f6" />}
-                    </View>
-                  )}
+
+                        {/* Item Breakdown Card */}
+                        <View style={[styles.breakdownCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                          <View style={styles.breakdownHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Ionicons name="receipt-outline" size={18} color={theme.button} />
+                              <Text style={[styles.breakdownTitle, { color: theme.text }]}>
+                                {t('detail.items_breakdown')}
+                              </Text>
+                            </View>
+                            <View style={[styles.breakdownCountBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
+                              <Text style={[styles.breakdownCountText, { color: theme.textDim }]}>
+                                {items.length} {t('home.items_count', { count: items.length, defaultValue: `${items.length} items` })}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {items.length === 0 ? (
+                            <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center' }}>
+                              <Ionicons name="clipboard-outline" size={32} color={theme.textDim} style={{ marginBottom: 8 }} />
+                              <Text style={{ color: theme.textDim, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+                                {t('detail.no_items')}
+                              </Text>
+                              <TouchableOpacity
+                                style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#e0e7ff' }}
+                                onPress={() => setIsEditing(true)}
+                              >
+                                <Text style={{ color: theme.button, fontSize: 13, fontWeight: '700' }}>
+                                  + {t('detail.add_items')}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <>
+                              <View style={[styles.breakdownTableHeader, { borderBottomColor: theme.border }]}>
+                                <Text style={[styles.breakdownTableHeadText, { flex: 2, color: theme.textDim }]}>{t('detail.item')}</Text>
+                                <Text style={[styles.breakdownTableHeadText, { flex: 0.8, textAlign: 'center', color: theme.textDim }]}>{t('detail.qty')}</Text>
+                                <Text style={[styles.breakdownTableHeadText, { flex: 1.2, textAlign: 'right', color: theme.textDim }]}>{t('detail.unit_price')}</Text>
+                                <Text style={[styles.breakdownTableHeadText, { flex: 1.3, textAlign: 'right', color: theme.textDim }]}>{t('detail.line_total')}</Text>
+                              </View>
+
+                              {items.map((item: any, idx: number) => {
+                                const qty = toAmount(item.quantity, 1);
+                                const price = toAmount(item.price);
+                                const lineTotal = qty * price;
+                                return (
+                                  <View
+                                    key={item.id || idx}
+                                    style={[
+                                      styles.breakdownTableRow,
+                                      { borderBottomColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' },
+                                      idx % 2 === 1 && { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)' }
+                                    ]}
+                                  >
+                                    <View style={{ flex: 2, paddingRight: 6 }}>
+                                      <Text style={[styles.breakdownItemName, { color: theme.text }]} numberOfLines={2}>
+                                        {item.name || item.description || t('detail.item')}
+                                      </Text>
+                                    </View>
+                                    <Text style={[styles.breakdownItemQty, { flex: 0.8, textAlign: 'center', color: theme.textDim }]}>
+                                      {qty}
+                                    </Text>
+                                    <Text style={[styles.breakdownItemPrice, { flex: 1.2, textAlign: 'right', color: theme.textDim }]}>
+                                      {expSym}{formatMoney(price)}
+                                    </Text>
+                                    <Text style={[styles.breakdownItemTotal, { flex: 1.3, textAlign: 'right', color: theme.text }]}>
+                                      {expSym}{formatMoney(lineTotal)}
+                                    </Text>
+                                  </View>
+                                );
+                              })}
+
+                              <View style={[styles.breakdownSummary, { borderTopColor: theme.border }]}>
+                                {toAmount(selectedExpense?.tax) > 0 && (
+                                  <View style={styles.breakdownSummaryRow}>
+                                    <Text style={[styles.breakdownSummaryLabel, { color: theme.textDim }]}>
+                                      {t('detail.tax')}
+                                    </Text>
+                                    <Text style={[styles.breakdownSummaryValue, { color: theme.text }]}>
+                                      {expSym}{formatMoney(selectedExpense.tax)}
+                                    </Text>
+                                  </View>
+                                )}
+                                <View style={[styles.breakdownSummaryRow, { marginTop: 4 }]}>
+                                  <Text style={[styles.breakdownSummaryLabelBold, { color: theme.text }]}>
+                                    {t('detail.total')}
+                                  </Text>
+                                  <Text style={[styles.breakdownSummaryValueBold, { color: theme.text }]}>
+                                    {expSym}{formatMoney(selectedExpense?.amount)}
+                                  </Text>
+                                </View>
+                              </View>
+                            </>
+                          )}
+                        </View>
+
+                        {/* Receipt Image Card */}
+                        {selectedExpense?.receipt_image_key && (
+                          <View style={[styles.receiptImageCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <View style={styles.receiptImageHeader}>
+                              <Ionicons name="image-outline" size={18} color="#8b5cf6" />
+                              <Text style={[styles.receiptImageTitle, { color: theme.text }]}>
+                                {t('detail.receipt_image')}
+                              </Text>
+                            </View>
+                            <View style={styles.receiptPrev}>
+                              {receiptUrl ? (
+                                <Image source={{ uri: receiptUrl }} style={styles.receiptImg} resizeMode="contain" />
+                              ) : (
+                                <ActivityIndicator color="#3b82f6" />
+                              )}
+                            </View>
+                          </View>
+                        )}
+                      </>
+                    );
+                  })()}
                 </View>
               )}
             </ScrollView>
@@ -1665,49 +1879,57 @@ export default function HomeScreen() {
             
             {/* Subscription Status Block */}
             <View style={{ paddingBottom: 15, marginBottom: 15, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}>
-              <Text style={{ color: theme.textDim, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8, letterSpacing: 0.5 }}>Subscription Status</Text>
+              <Text style={{ color: theme.textDim, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8, letterSpacing: 0.5 }}>
+                {t('settings.subscription_status')}
+              </Text>
               {isPremium ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Ionicons name="star" size={16} color="#f59e0b" />
-                  <Text style={{ color: '#f59e0b', fontSize: 13, fontWeight: '700' }}>Premium Active</Text>
+                  <Text style={{ color: '#f59e0b', fontSize: 13, fontWeight: '700' }}>{t('settings.premium_active')}</Text>
                 </View>
               ) : trialDaysLeft > 0 ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Ionicons name="time" size={16} color="#3b82f6" />
-                  <Text style={{ color: '#3b82f6', fontSize: 13, fontWeight: '700' }}>{trialDaysLeft} days trial remaining</Text>
+                  <Text style={{ color: '#3b82f6', fontSize: 13, fontWeight: '700' }}>
+                    {t('settings.trial_remaining', { count: trialDaysLeft })}
+                  </Text>
                 </View>
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Ionicons name="alert-circle" size={16} color="#ff4b4b" />
-                  <Text style={{ color: '#ff4b4b', fontSize: 13, fontWeight: '700' }}>Free Trial Expired</Text>
+                  <Text style={{ color: '#ff4b4b', fontSize: 13, fontWeight: '700' }}>{t('settings.trial_expired')}</Text>
                 </View>
               )}
               <TouchableOpacity
                 style={{ marginTop: 12, backgroundColor: 'rgba(139, 92, 246, 0.1)', paddingVertical: 8, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(139, 92, 246, 0.3)' }}
                 onPress={() => safelySwitchModal(setIsSubscriptionVisible)}
               >
-                <Text style={{ color: '#8b5cf6', fontSize: 12, fontWeight: '700' }}>Manage Subscriptions</Text>
+                <Text style={{ color: '#8b5cf6', fontSize: 12, fontWeight: '700' }}>{t('settings.manage_subscriptions')}</Text>
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowSettings(false); openProfile(); }}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => safelySwitchModal(openProfile)}>
               <Ionicons name="person-outline" size={20} color={theme.text} />
-              <Text style={[styles.menuText, { color: theme.text }]}>Profile</Text>
+              <Text style={[styles.menuText, { color: theme.text }]}>{t('settings.profile')}</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.menuItem} onPress={toggleTheme}>
               <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={20} color={isDark ? "#8b5cf6" : "#3b82f6"} />
-              <Text style={[styles.menuText, { color: theme.text }]}>{isDark ? 'Switch to Day' : 'Switch to Night'}</Text>
+              <Text style={[styles.menuText, { color: theme.text }]}>
+                {isDark ? t('settings.switch_to_day') : t('settings.switch_to_night')}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.menuItem} onPress={toggleLanguage}>
               <Ionicons name="language-outline" size={20} color="#f59e0b" />
-              <Text style={[styles.menuText, { color: theme.text }]}>{i18n.language === 'en' ? 'Switch to Chinese' : '切換為英文'}</Text>
+              <Text style={[styles.menuText, { color: theme.text }]}>
+                {i18n.language === 'en' ? '中文 (Chinese)' : 'English'}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.menuItem} onPress={() => safelySwitchModal(setIsCurrencyPickerVisible)}>
               <Ionicons name="cash-outline" size={20} color="#10b981" />
-              <Text style={[styles.menuText, { color: theme.text }]}>Currency ({selectedCurrency})</Text>
+              <Text style={[styles.menuText, { color: theme.text }]}>{t('settings.currency', { code: selectedCurrency })}</Text>
               <Text style={{ marginLeft: 'auto', color: '#10b981', fontWeight: '700', fontSize: 13, marginRight: 4 }}>
                 {currencySymbol}
               </Text>
@@ -1715,12 +1937,12 @@ export default function HomeScreen() {
 
             <TouchableOpacity style={styles.menuItem} onPress={() => safelySwitchModal(setIsSupportVisible)}>
               <Ionicons name="headset-outline" size={20} color={theme.text} />
-              <Text style={[styles.menuText, { color: theme.text }]}>Customer Support</Text>
+              <Text style={[styles.menuText, { color: theme.text }]}>{t('settings.support')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.menuItem} onPress={() => { setShowSettings(false); Linking.openURL('https://expense.alpha-devs.cloud/privacy/'); }}>
               <Ionicons name="shield-checkmark-outline" size={20} color={theme.text} />
-              <Text style={[styles.menuText, { color: theme.text }]}>Privacy & Terms</Text>
+              <Text style={[styles.menuText, { color: theme.text }]}>{t('settings.privacy_terms')}</Text>
               <Ionicons name="open-outline" size={16} color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} style={{ marginLeft: 'auto' }} />
             </TouchableOpacity>
 
@@ -1728,7 +1950,7 @@ export default function HomeScreen() {
             
             <TouchableOpacity style={styles.menuItem} onPress={() => supabase.auth.signOut()}>
               <Ionicons name="log-out-outline" size={20} color="#ff4b4b" />
-              <Text style={styles.menuText}>Logout</Text>
+              <Text style={styles.menuText}>{t('settings.logout')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1740,7 +1962,7 @@ export default function HomeScreen() {
           <View style={[styles.currencySheet, { backgroundColor: theme.background, borderColor: theme.border }]}>
             <SafeAreaView style={{ flex: 1 }}>
               <View style={styles.currencyHeader}>
-                <Text style={[styles.currencyTitle, { color: theme.text }]}>Select Currency</Text>
+                <Text style={[styles.currencyTitle, { color: theme.text }]}>{t('currency.select')}</Text>
                 <TouchableOpacity onPress={() => { setIsCurrencyPickerVisible(false); setCurrencySearchQuery(''); }}>
                   <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
@@ -1750,7 +1972,7 @@ export default function HomeScreen() {
                 <Ionicons name="search" size={18} color={theme.textDim} style={{ marginRight: 8 }} />
                 <TextInput
                   style={[styles.currencySearchInput, { color: theme.text }]}
-                  placeholder="Search currency code or name..."
+                  placeholder={t('currency.search')}
                   placeholderTextColor={theme.textDim}
                   value={currencySearchQuery}
                   onChangeText={setCurrencySearchQuery}
@@ -1807,8 +2029,8 @@ export default function HomeScreen() {
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
           <View style={styles.loaderContent}>
             <ActivityIndicator size="large" color="#3b82f6" />
-            <Text style={styles.loaderText}>Analyzing Receipt...</Text>
-            <Text style={styles.loaderSubText}>This may take a few seconds</Text>
+            <Text style={styles.loaderText}>{t('scan.analyzing')}</Text>
+            <Text style={styles.loaderSubText}>{t('scan.analyzing_sub')}</Text>
           </View>
         </View>
       </Modal>
@@ -1936,6 +2158,107 @@ const styles = StyleSheet.create({
   catBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   catBadgeText: { fontSize: 12, fontWeight: '600' },
   detailDateText: { color: '#71717a', fontSize: 12 },
+  breakdownCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  breakdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  breakdownTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  breakdownCountBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  breakdownCountText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  breakdownTableHeader: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  breakdownTableHeadText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  breakdownTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  breakdownItemName: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  breakdownItemQty: {
+    fontSize: 13,
+  },
+  breakdownItemPrice: {
+    fontSize: 13,
+  },
+  breakdownItemTotal: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  breakdownSummary: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+  },
+  breakdownSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 3,
+  },
+  breakdownSummaryLabel: {
+    fontSize: 13,
+  },
+  breakdownSummaryValue: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  breakdownSummaryLabelBold: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  breakdownSummaryValueBold: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  receiptImageCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 20,
+  },
+  receiptImageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  receiptImageTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
   itemsList: { width: '100%', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: 12, marginBottom: 20 },
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   itemName: { color: '#a1a1aa', fontSize: 13 },
