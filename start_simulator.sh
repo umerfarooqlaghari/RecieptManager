@@ -1,0 +1,1 @@
+/Users/macbookpro/Desktop/projects/start_mobile_apps.sh
