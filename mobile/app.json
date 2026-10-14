@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.umerfarooqlaghari.expensemanager",
+      "appleTeamId": "2WQ7LU7T5X",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSUserNotificationsUsageDescription": "Expense Manager sends notifications when receipts are scanned and expenses are logged."
