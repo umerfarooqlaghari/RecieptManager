@@ -42,3 +42,4 @@ backend-tests/.env.example
 start-all.sh
 mobile/eas.json
 mobile/eas.json
+*.ipa
