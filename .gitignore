@@ -43,3 +43,4 @@ start-all.sh
 mobile/eas.json
 mobile/eas.json
 *.ipa
+mobile/eas.json
