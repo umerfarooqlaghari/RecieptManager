@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import dotenv from "dotenv";
@@ -104,5 +104,34 @@ export async function sendEmail(to: string, subject: string, body: string, isHtm
   } catch (error) {
     console.error("Error sending email via SES:", error);
     throw error;
+  }
+}
+
+/**
+ * Deletes all S3 objects stored for a user (receipts and profile pictures)
+ */
+export async function deleteUserS3Data(userId: string) {
+  if (!bucketName || !userId) return;
+  const prefixes = [`receipts/${userId}/`, `profiles/${userId}/`];
+
+  for (const prefix of prefixes) {
+    try {
+      const listCommand = new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: prefix,
+      });
+      const listed = await s3Client.send(listCommand);
+      if (listed.Contents && listed.Contents.length > 0) {
+        const deleteParams = {
+          Bucket: bucketName,
+          Delete: {
+            Objects: listed.Contents.map((obj) => ({ Key: obj.Key! })),
+          },
+        };
+        await s3Client.send(new DeleteObjectsCommand(deleteParams));
+      }
+    } catch (err) {
+      console.warn(`[AWS S3] Non-fatal error deleting files for prefix ${prefix}:`, err);
+    }
   }
 }

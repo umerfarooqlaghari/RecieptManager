@@ -1,5 +1,5 @@
 import Purchases, { LOG_LEVEL, PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
-import { LogBox, Platform } from 'react-native';
+import { LogBox, Platform, Linking } from 'react-native';
 import Constants from 'expo-constants';
 
 /**
@@ -190,5 +190,40 @@ export const restorePurchases = async (): Promise<boolean> => {
   } catch (e) {
     console.warn('[RevenueCat] Restore failed:', e);
     return false;
+  }
+};
+
+/**
+ * Opens the native subscription management page on iOS (StoreKit sheet / App Store) or Android (Google Play)
+ * satisfying Apple App Store Review Guideline 3.1.2.
+ */
+export const manageSubscriptions = async (): Promise<void> => {
+  if (purchasesConfigured && Platform.OS === 'ios') {
+    try {
+      if (typeof Purchases.showManageSubscriptions === 'function') {
+        await Purchases.showManageSubscriptions();
+        return;
+      }
+    } catch (e) {
+      console.log('[RevenueCat] Purchases.showManageSubscriptions fallback:', e);
+    }
+  }
+
+  // Fallback to direct store URL
+  if (Platform.OS === 'ios') {
+    const itmsUrl = 'itms-apps://apps.apple.com/account/subscriptions';
+    const webUrl = 'https://apps.apple.com/account/subscriptions';
+    try {
+      const canOpen = await Linking.canOpenURL(itmsUrl);
+      if (canOpen) {
+        await Linking.openURL(itmsUrl);
+        return;
+      }
+    } catch {}
+    await Linking.openURL(webUrl).catch(() => {});
+  } else if (Platform.OS === 'android') {
+    await Linking.openURL('https://play.google.com/store/account/subscriptions').catch(() => {});
+  } else {
+    await Linking.openURL('https://apps.apple.com/account/subscriptions').catch(() => {});
   }
 };

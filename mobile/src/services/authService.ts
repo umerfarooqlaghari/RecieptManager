@@ -25,3 +25,18 @@ export async function verifySignupOtp(email: string, otp: string) {
   }
   return data;
 }
+
+export async function deleteAccount(accessToken: string) {
+  const response = await fetch(`${BACKEND_URL}/api/auth/delete-account`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to delete account');
+  }
+  return data;
+}

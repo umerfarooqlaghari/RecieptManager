@@ -76,7 +76,17 @@
     "currency": "货币 ({{code}})",
     "support": "客户支持",
     "privacy_terms": "隐私与条款",
-    "logout": "退出登录"
+    "logout": "退出登录",
+    "manage_sub_title": "管理或取消订阅",
+    "manage_sub_msg": "您的订阅通过 Apple ID 安全管理。\n\n如需取消自动续订或更改方案：\n1. 点击下方的“在 App Store 中管理”。\n2. 选择“Expense Manager”。\n3. 点击“取消订阅”。\n\n您的会员权益将在当前计费周期结束前继续有效。",
+    "manage_on_app_store": "在 App Store 中管理",
+    "view_plans": "查看高级会员方案",
+    "delete_account": "注销并删除账号",
+    "deleting_account": "正在删除账号...",
+    "delete_account_title": "确定永久注销并删除账号？",
+    "delete_account_msg": "此操作无法撤销。\n\n您所有的收据扫描记录、支出明细、分类和个人资料将立即从我们的服务器中彻底清除。\n\n请注意：删除账号不会自动取消正在生效的 Apple App Store 订阅。请前往 App Store 设置中取消订阅。",
+    "delete_account_confirm": "永久删除",
+    "delete_account_success": "您的账号及所有关联数据已彻底删除。"
   },
   "auth": {
     "login": "登录",

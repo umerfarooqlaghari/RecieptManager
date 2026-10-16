@@ -8,6 +8,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { LineChart } from 'react-native-gifted-charts';
 import ItemSpendingChart from '../components/ItemSpendingChart';
 import { fetchExpenses, fetchExpenseById, deleteExpense, updateExpense, getReceiptUrl, createExpense, submitSupport, uploadProfilePicture, exportExpensesExcel } from '../services/expenseService';
+import { deleteAccount } from '../services/authService';
+import { manageSubscriptions, isPurchasesReady } from '../services/subscriptionService';
+import Purchases from 'react-native-purchases';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../providers/ThemeProvider';
 import PaywallScreen from './PaywallScreen';
@@ -121,6 +124,7 @@ export default function HomeScreen() {
   const [isSubmittingSupport, setIsSubmittingSupport] = useState(false);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isMainLoading, setIsMainLoading] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // Currency State
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
@@ -621,6 +625,82 @@ export default function HomeScreen() {
       } catch (e: any) {
         console.warn('Failed to save currency preference to profile:', e?.message);
       }
+    }
+  };
+
+  const handleManageCancelSubscriptions = () => {
+    setShowSettings(false);
+    Alert.alert(
+      t('settings.manage_sub_title', 'Manage or Cancel Subscription'),
+      t('settings.manage_sub_msg', 'Your subscription is securely managed through your Apple ID.\n\nTo cancel auto-renewal or change plans:\n1. Tap "Manage on App Store" below.\n2. Select "Expense Manager".\n3. Tap "Cancel Subscription".\n\nYour premium benefits will remain active until the end of your current billing period.'),
+      [
+        { text: t('common.cancel', 'Close'), style: 'cancel' },
+        {
+          text: t('settings.manage_on_app_store', 'Manage on App Store'),
+          onPress: () => {
+            manageSubscriptions().catch(() => {});
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccountPress = () => {
+    Alert.alert(
+      t('settings.delete_account_title', 'Delete Account & All Data?'),
+      t('settings.delete_account_msg', 'This action is permanent and cannot be undone.\n\nAll your receipts, scanned data, itemized expenses, and account profile will be permanently erased from our servers immediately.\n\nImportant: Deleting your account does not automatically cancel an active Apple App Store subscription. Please cancel your subscription in App Store settings.'),
+      [
+        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+        {
+          text: t('settings.manage_subscriptions', 'Manage Subscriptions'),
+          onPress: () => {
+            manageSubscriptions().catch(() => {});
+          },
+        },
+        {
+          text: t('settings.delete_account_confirm', 'Permanently Delete'),
+          style: 'destructive',
+          onPress: confirmDeleteAccount,
+        },
+      ]
+    );
+  };
+
+  const confirmDeleteAccount = async () => {
+    setIsDeletingAccount(true);
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession?.access_token) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
+
+      await deleteAccount(currentSession.access_token);
+
+      // Clean up RevenueCat session if active
+      try {
+        if (isPurchasesReady()) {
+          const isAnon = await Purchases.isAnonymous();
+          if (!isAnon) await Purchases.logOut();
+        }
+      } catch (rcErr) {
+        console.warn('RevenueCat logout error on account delete:', rcErr);
+      }
+
+      // Sign out from Supabase
+      await supabase.auth.signOut();
+      setShowSettings(false);
+      Alert.alert(
+        t('common.success', 'Success'),
+        t('settings.delete_account_success', 'Your account and all associated data have been permanently erased.')
+      );
+    } catch (err: any) {
+      console.error('Account deletion error:', err);
+      Alert.alert(
+        t('common.error', 'Error'),
+        err?.message || 'Failed to delete account. Please check your internet connection or contact support.'
+      );
+    } finally {
+      setIsDeletingAccount(false);
     }
   };
 
@@ -1900,12 +1980,22 @@ export default function HomeScreen() {
                   <Text style={{ color: '#ff4b4b', fontSize: 13, fontWeight: '700' }}>{t('settings.trial_expired')}</Text>
                 </View>
               )}
-              <TouchableOpacity
-                style={{ marginTop: 12, backgroundColor: 'rgba(139, 92, 246, 0.1)', paddingVertical: 8, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(139, 92, 246, 0.3)' }}
-                onPress={() => safelySwitchModal(setIsSubscriptionVisible)}
-              >
-                <Text style={{ color: '#8b5cf6', fontSize: 12, fontWeight: '700' }}>{t('settings.manage_subscriptions')}</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: 'rgba(139, 92, 246, 0.12)', paddingVertical: 8, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(139, 92, 246, 0.3)' }}
+                  onPress={handleManageCancelSubscriptions}
+                >
+                  <Text style={{ color: '#8b5cf6', fontSize: 12, fontWeight: '700' }}>{t('settings.manage_subscriptions')}</Text>
+                </TouchableOpacity>
+                {!isPremium && (
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#8b5cf6', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center' }}
+                    onPress={() => safelySwitchModal(setIsSubscriptionVisible)}
+                  >
+                    <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: '700' }}>{t('settings.view_plans')}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
             <TouchableOpacity style={styles.menuItem} onPress={() => safelySwitchModal(openProfile)}>
@@ -1940,6 +2030,12 @@ export default function HomeScreen() {
               <Text style={[styles.menuText, { color: theme.text }]}>{t('settings.support')}</Text>
             </TouchableOpacity>
 
+            <TouchableOpacity style={styles.menuItem} onPress={handleManageCancelSubscriptions}>
+              <Ionicons name="card-outline" size={20} color={theme.text} />
+              <Text style={[styles.menuText, { color: theme.text }]}>{t('settings.manage_sub_title')}</Text>
+              <Ionicons name="open-outline" size={16} color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} style={{ marginLeft: 'auto' }} />
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.menuItem} onPress={() => { setShowSettings(false); Linking.openURL('https://expense.alpha-devs.cloud/privacy/'); }}>
               <Ionicons name="shield-checkmark-outline" size={20} color={theme.text} />
               <Text style={[styles.menuText, { color: theme.text }]}>{t('settings.privacy_terms')}</Text>
@@ -1949,8 +2045,22 @@ export default function HomeScreen() {
             <View style={{ height: 1.5, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', marginVertical: 5 }} />
             
             <TouchableOpacity style={styles.menuItem} onPress={() => supabase.auth.signOut()}>
-              <Ionicons name="log-out-outline" size={20} color="#ff4b4b" />
-              <Text style={styles.menuText}>{t('settings.logout')}</Text>
+              <Ionicons name="log-out-outline" size={20} color={theme.textDim} />
+              <Text style={[styles.menuText, { color: theme.textDim }]}>{t('settings.logout')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={handleDeleteAccountPress} 
+              disabled={isDeletingAccount}
+            >
+              <Ionicons name="trash-outline" size={20} color="#ff4b4b" />
+              <Text style={[styles.menuText, { color: '#ff4b4b', fontWeight: '700' }]}>
+                {isDeletingAccount ? t('settings.deleting_account') : t('settings.delete_account')}
+              </Text>
+              {isDeletingAccount && (
+                <ActivityIndicator size="small" color="#ff4b4b" style={{ marginLeft: 'auto' }} />
+              )}
             </TouchableOpacity>
           </View>
         </View>

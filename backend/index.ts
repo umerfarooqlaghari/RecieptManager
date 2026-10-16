@@ -9,7 +9,7 @@ import * as geminiService from './services/geminiService';
 import * as expenseService from './services/expenseService';
 import * as otpService from './services/otpService';
 import * as currencyService from './services/currencyService';
-import { getSupabaseClient } from './lib/supabase';
+import { getSupabaseClient, supabaseAdmin } from './lib/supabase';
 
 dotenv.config();
 
@@ -123,6 +123,60 @@ app.post('/api/auth/verify-otp', otpLimiter, async (req: Request, res: Response)
   } catch (error: any) {
     console.error('[OTP] verify failed:', error.message);
     res.status(400).json({ error: error.message || 'Failed to verify code' });
+  }
+});
+
+// ─── Account Deletion Endpoint (Apple Guideline 5.1.1(v) & GDPR) ───────────────
+app.delete('/api/auth/delete-account', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user || !user.id) {
+      return res.status(401).json({ error: 'Unauthorized: missing user identifier' });
+    }
+
+    const userId = user.id;
+    const authHeader = req.headers.authorization || '';
+    const accessToken = authHeader.replace(/^Bearer\s+/i, '');
+
+    console.log(`[Account Deletion] Initiating permanent deletion for user: ${userId}`);
+
+    // 1. Purge S3 files (receipt images & profile pictures)
+    try {
+      await awsService.deleteUserS3Data(userId);
+      console.log(`[Account Deletion] S3 data purged for user: ${userId}`);
+    } catch (s3Error: any) {
+      console.warn(`[Account Deletion] S3 purge warning for user ${userId}:`, s3Error?.message);
+    }
+
+    // 2. Cascade delete database records
+    if (supabaseAdmin) {
+      // Deleting from auth.users cascades through profiles, expenses, expense_items, custom categories
+      const { error: adminErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (adminErr) {
+        console.error(`[Account Deletion] supabaseAdmin.deleteUser failed:`, adminErr);
+        // Fallback: Delete from public.profiles table using scoped client
+        const scopedClient = getSupabaseClient(accessToken);
+        await scopedClient.from('profiles').delete().eq('id', userId);
+        return res.status(500).json({ error: 'Failed to fully delete auth user. ' + adminErr.message });
+      }
+    } else {
+      console.warn('[Account Deletion] SUPABASE_SERVICE_ROLE_KEY not configured. Falling back to scoped client profile deletion.');
+      const scopedClient = getSupabaseClient(accessToken);
+      const { error: profileErr } = await scopedClient.from('profiles').delete().eq('id', userId);
+      if (profileErr) {
+        console.error(`[Account Deletion] Profile deletion failed:`, profileErr);
+        return res.status(500).json({ error: 'Failed to delete profile data.' });
+      }
+    }
+
+    console.log(`[Account Deletion] User ${userId} successfully deleted.`);
+    return res.json({
+      success: true,
+      message: 'User account and all associated data have been permanently deleted.',
+    });
+  } catch (error: any) {
+    console.error('[Account Deletion] Unhandled error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to delete account' });
   }
 });
 

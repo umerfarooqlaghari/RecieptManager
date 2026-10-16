@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, Act
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getOfferings, purchasePackage, restorePurchases, PACKAGE_IDS, PACKAGE_ID_FALLBACKS } from '../services/subscriptionService';
+import { getOfferings, purchasePackage, restorePurchases, manageSubscriptions, PACKAGE_IDS, PACKAGE_ID_FALLBACKS } from '../services/subscriptionService';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../providers/ThemeProvider';
 import { useAuth } from '../providers/AuthProvider';
@@ -253,9 +253,15 @@ export default function PaywallScreen({ onClose, isForced = false }: PaywallScre
           )}
 
           <View style={styles.footer}>
-            <TouchableOpacity onPress={handleRestore} disabled={isPurchasing}>
-              <Text style={[styles.footerLink, { color: theme.textDim }]}>{t('premium.restore')}</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+              <TouchableOpacity onPress={handleRestore} disabled={isPurchasing}>
+                <Text style={[styles.footerLink, { color: theme.textDim }]}>{t('premium.restore')}</Text>
+              </TouchableOpacity>
+              <Text style={{ color: theme.textDim, opacity: 0.4 }}>•</Text>
+              <TouchableOpacity onPress={manageSubscriptions} disabled={isPurchasing}>
+                <Text style={[styles.footerLink, { color: theme.textDim }]}>{t('settings.manage_subscriptions', 'Manage / Cancel')}</Text>
+              </TouchableOpacity>
+            </View>
             
             <View style={styles.legalLinksRow}>
               <TouchableOpacity onPress={() => Linking.openURL('https://expense.alpha-devs.cloud/privacy/').catch(() => Alert.alert('Privacy Policy', 'Visit https://expense.alpha-devs.cloud/privacy/'))}>

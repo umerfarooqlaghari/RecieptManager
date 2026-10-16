@@ -76,7 +76,17 @@
     "currency": "Currency ({{code}})",
     "support": "Customer Support",
     "privacy_terms": "Privacy & Terms",
-    "logout": "Logout"
+    "logout": "Logout",
+    "manage_sub_title": "Manage or Cancel Subscription",
+    "manage_sub_msg": "Your subscription is securely managed through your Apple ID.\n\nTo cancel auto-renewal or change plans:\n1. Tap 'Manage on App Store' below.\n2. Select 'Expense Manager'.\n3. Tap 'Cancel Subscription'.\n\nYour premium benefits will remain active until the end of your current billing period.",
+    "manage_on_app_store": "Manage on App Store",
+    "view_plans": "View Premium Plans",
+    "delete_account": "Delete Account",
+    "deleting_account": "Deleting Account...",
+    "delete_account_title": "Delete Account & All Data?",
+    "delete_account_msg": "This action is permanent and cannot be undone.\n\nAll your receipts, scanned data, itemized expenses, and account profile will be permanently erased from our servers immediately.\n\nImportant: Deleting your account does not automatically cancel an active Apple App Store subscription. Please cancel your subscription in App Store settings.",
+    "delete_account_confirm": "Permanently Delete",
+    "delete_account_success": "Your account and all associated data have been permanently erased."
   },
   "auth": {
     "login": "Login",
